@@ -1,15 +1,10 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
-from django.http import HttpResponse
-from django.shortcuts import render
 from django.utils import timezone
 
 from rest_framework import generics, serializers, status, viewsets
-from rest_framework.decorators import (
-    action,
-    permission_classes,
-)
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
@@ -38,8 +33,16 @@ from Bookshelf.openapi import (
 )
 from books.models import BorrowedBook
 from books.serializers import BarrowBookSerilaizers
-from .serializers import *
-from books.views import get_user_tier
+from .models import Governorate
+from .serializers import (
+    CurrentUserSerializer,
+    GovernorateOptionSerializer,
+    LoginSerializer,
+    ProfileSerializer,
+    RegisteredUserSerializer,
+    RegisterSerializer,
+    ResetPasswordSerilaizer,
+)
 
 User = get_user_model()
 
@@ -64,29 +67,72 @@ def _delete_refresh_cookie(response):
     )
 
 
-@extend_schema_view(post=extend_schema(exclude=True))
-class RegisterView(generics.CreateAPIView):
+@extend_schema_view(
+    post=extend_schema(
+        tags=["Authentication"],
+        operation_id="auth_register",
+        summary="تسجيل حساب قارئ جديد",
+        description=(
+            "ينشئ حساب READER دائماً ضمن محافظة فعالة يختارها المستخدم، دون مكتبة. "
+            "لا يقبل role أو library أو أي حقول إدارية مثل is_staff وis_superuser "
+            "وgroups وuser_permissions. لا يسجّل الدخول تلقائياً."
+        ),
+        auth=[],
+        request=RegisterSerializer,
+        responses={
+            201: success_envelope(
+                "RegisterSuccessEnvelope", RegisteredUserSerializer(), ["ACCOUNT_REGISTERED"]
+            ),
+            400: error_response("VALIDATION_ERROR مع تفاصيل الحقول."),
+            429: error_response("THROTTLED."),
+        },
+    )
+)
+class RegisterView(ArabicApiResponseMixin, generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = [AllowAny]
+    authentication_classes = []
     serializer_class = RegisterSerializer
+    success_response_messages = {
+        "post": ("ACCOUNT_REGISTERED", "تم إنشاء الحساب بنجاح."),
+    }
 
     def create(self, request, *args, **kwargs):
-        serilizer = self.get_serializer(data=request.data)
-        serilizer.is_valid(raise_exception=True)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(
+            RegisteredUserSerializer(user).data,
+            status=status.HTTP_201_CREATED,
+        )
 
-        user = serilizer.save()
 
-        data = {
-            "message": "تم انشاء المستخدم بنجاح ",
-            "user": {
-                "username": user.username,
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-            },
-        }
-
-        return Response(data, status=status.HTTP_201_CREATED)
+@extend_schema_view(
+    get=extend_schema(
+        tags=["Authentication"],
+        operation_id="governorates_active_list",
+        summary="قائمة المحافظات الفعالة",
+        description="قائمة عامة بالمحافظات الفعالة (المعرّف والاسم فقط) لاستخدامها في التسجيل.",
+        auth=[],
+        responses={
+            200: success_envelope(
+                "GovernorateListSuccessEnvelope",
+                GovernorateOptionSerializer(many=True),
+                ["GOVERNORATES_RETRIEVED"],
+            ),
+            429: error_response("THROTTLED."),
+        },
+    )
+)
+class GovernorateListView(ArabicApiResponseMixin, generics.ListAPIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    serializer_class = GovernorateOptionSerializer
+    pagination_class = None
+    queryset = Governorate.objects.filter(is_active=True).order_by("name", "id")
+    success_response_messages = {
+        "get": ("GOVERNORATES_RETRIEVED", "تم جلب المحافظات بنجاح."),
+    }
 
 
 @extend_schema_view(
@@ -128,6 +174,8 @@ class LoginView(ArabicApiResponseMixin, APIView):
                 "id": user.id,
                 "username": user.username,
                 "role": get_user_role_meta(user),
+                "governorate": user.governorate_id,
+                "library": user.library_id,
             },
         }
         response = Response(data, status=status.HTTP_200_OK)
@@ -380,8 +428,9 @@ Authenticated API for changing the current user's password.
         operation_id="profile_replace",
         summary="تحديث الملف الشخصي بالكامل",
         description=(
-            "الحقول القابلة للتعديل موضحة في request schema. لا يمكن تعديل role أو governorate "
-            "أو library أو is_active أو is_staff أو is_superuser أو password أو borrowing_blocked."
+            "الحقول القابلة للتعديل موضحة في request schema. إرسال role أو is_active أو is_staff "
+            "أو is_superuser أو groups أو user_permissions أو password يُرفض بـVALIDATION_ERROR، "
+            "وكذلك governorate أو library بقيمة تختلف عن القيمة الحالية. borrowing_blocked للقراءة فقط."
         ),
         request=ProfileUpdateSchemaSerializer,
         responses={
@@ -399,7 +448,8 @@ Authenticated API for changing the current user's password.
         summary="تحديث جزئي للملف الشخصي",
         description=(
             "يسمح فقط بـemail وfirst_name وlast_name وحقول profile: address وphone وgender وage. "
-            "حقول الدور والنطاق والحالة وكلمة المرور وحظر الاستعارة غير قابلة للتعديل هنا."
+            "إرسال حقول الدور أو الصلاحيات أو كلمة المرور، أو تغيير governorate أو library، "
+            "يُرفض بـVALIDATION_ERROR."
         ),
         request=ProfileUpdateSchemaSerializer,
         responses={
@@ -421,17 +471,10 @@ class ProfileView(ArabicApiResponseMixin, generics.RetrieveUpdateAPIView):
         "patch": ("PROFILE_UPDATED", "تم تحديث معلومات الحساب بنجاح."),
     }
 
-    def _get_user_activities(self, user):
-        return (
-            ActivityRegistration.objects.select_related("activity")
-            .filter(user=user, activity__is_visible=True)
-            .order_by("-created_at")
-        )
-
     def get_object(self):
 
         today = timezone.now().date()
-        user = User.objects.annotate(
+        return User.objects.annotate(
             borrowed_books_count=Count(
                 "borrower_book",
                 filter=Q(borrower_book__is_returned=False),
@@ -445,16 +488,7 @@ class ProfileView(ArabicApiResponseMixin, generics.RetrieveUpdateAPIView):
                 ),
                 distinct=True,
             ),
-            favorites_count=Count(
-                "user_fav",
-                filter=Q(user_fav__book__is_archived=False),
-                distinct=True,
-            ),
         ).get(id=self.request.user.id)
-        user.tier, mx = get_user_tier(user)
-        user.registered_activities = self._get_user_activities(user)
-        user.available_books = mx if mx < 0 else max(mx - user.borrowed_books_count, 0)
-        return user
 
 
 """
@@ -474,9 +508,6 @@ Authenticated API for retrieving and updating the current user's profile with ex
         - Count of active overdue borrow records:
         - `borrower_book__is_returned = False`
         - `borrower_book__due_date__lt = today`
-      - `favorites_count`  
-        - Count of favorite books that are not archived:
-        - `user_fav__book__is_archived = False`
     - Returns the annotated user object serialized via `ProfileSerializer`.
 
 - **Update current user's profile**
@@ -488,7 +519,6 @@ Authenticated API for retrieving and updating the current user's profile with ex
     - Still returns the profile including:
       - `borrowed_books_count`
       - `overdue_books_count`
-      - `favorites_count`
 """
 
 
@@ -617,43 +647,5 @@ Authenticated API for users to view their previously returned (recovered) books.
   - `GET /api/recovered-borrows/{id}/`
   - Auth required.
   - Returns details of a single returned borrow record that belongs to the current user.
-
-"""
-
-
-class FavoriteBooksProfileView(viewsets.ReadOnlyModelViewSet):
-    serializer_class = FavoriteBookSerializer
-    queryset = Favorite_Book.objects.all()
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        return (
-            Favorite_Book.objects.filter(user=user, book__is_archived=False)
-            #  .select_related( "book" , "book__author" , "book__category")
-            # .order_by("-created_at")
-        )
-
-
-"""
-### FavoriteBooksProfileView
-
-Authenticated read-only API for users to browse their favorite (liked) books.
-
-- **List favorite books**
-  - `GET /api/favorites/`
-  - Auth required.
-  - Returns all `Favorite_Book` records where:
-    - `user = request.user`
-    - related book is not archived (`book__is_archived = False`)
-  - Uses `FavoriteBookSerializer` for serialization.
-  - Optimized with:
-    - `.select_related("book", "book__author", "book__category")`
-    - `.order_by("-created_at")` (newest favorites first)
-
-- **Retrieve a single favorite entry**
-  - `GET /api/favorites/{id}/`
-  - Auth required.
-  - Returns details of a single favorite record that belongs to the current user, including the related book, author, and category data.
 
 """

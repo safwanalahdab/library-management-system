@@ -5,6 +5,14 @@ from .forms import CustomUserCreationForm
 from .models import CustomUser, Governorate, Library
 
 
+ROLE_SCOPE_HELP = (
+    "MINISTRY_ADMIN: no governorate or library. "
+    "GOVERNORATE_ADMIN: governorate only. "
+    "LIBRARIAN: library only (governorate comes from the library). "
+    "READER: governorate only, no library."
+)
+
+
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
     add_form = CustomUserCreationForm
@@ -13,6 +21,7 @@ class CustomUserAdmin(UserAdmin):
         (
             "Organization and profile",
             {
+                "description": ROLE_SCOPE_HELP,
                 "fields": (
                     "role",
                     "governorate",
@@ -29,10 +38,11 @@ class CustomUserAdmin(UserAdmin):
     add_fieldsets = UserAdmin.add_fieldsets + (
         (
             "Organization and profile",
-            {"fields": ("role", "governorate", "library")},
+            {"description": ROLE_SCOPE_HELP, "fields": ("role", "governorate", "library")},
         ),
     )
-    list_display = ("username", "email", "role", "is_staff", "is_active")
+    list_display = ("username", "email", "role", "governorate", "library", "is_staff", "is_active")
+    list_select_related = ("governorate", "library")
     list_filter = UserAdmin.list_filter + ("role", "governorate", "library")
 
 

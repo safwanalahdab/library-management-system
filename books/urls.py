@@ -1,18 +1,13 @@
-from django.urls import path , include 
-from rest_framework.routers import DefaultRouter 
-from .views import * 
-from . import views
+from django.urls import path , include
+from rest_framework.routers import DefaultRouter
+from .views import BookViewSet, CategoryViewSet
 
 
-router = DefaultRouter() 
-router.register('books', BookViewSet , basename = 'books' ) 
-router.register('category', CategoryViewSet , basename = 'category' ) 
-router.register('activity' , ActivityViewSet , basename = "activity")
-router.register("quotes", QuoteViewSet, basename="quotes")
+router = DefaultRouter()
+router.register('books', BookViewSet , basename = 'books' )
+router.register('category', CategoryViewSet , basename = 'category' )
 
 
 urlpatterns = [
        path('api/', include( router.urls ) ) ,
-       path('api/recommendations/me/', MyRecommendationsView.as_view(), name='my_recommendations'),
 ]
-

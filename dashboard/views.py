@@ -3,7 +3,6 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Q
-from django.shortcuts import render
 from django.utils import timezone
 
 from django.http import HttpResponse
@@ -12,10 +11,15 @@ from openpyxl import Workbook
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAdminUser , IsAuthenticated ,AllowAny
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 
 from Bookshelf.api_responses import ArabicApiResponseMixin
 from Bookshelf.openapi import (
@@ -24,21 +28,41 @@ from Bookshelf.openapi import (
     error_response,
     success_envelope,
 )
-from books.models import *
-from books.serializers import *
-from accounts.permissions import CanAccessUser, CanResetUserPassword, IsLibrarian
-from accounts.scopes import can_manage_user_status, has_active_user_scope, users_accessible_to
+from books.models import Book, BorrowedBook, Category, Author
+from books.serializers import (
+    AuthorSerializers,
+    BarrowBookSerilaizers,
+    BookSerializers,
+    CategorySerializers,
+)
+from accounts.permissions import (
+    CanAccessUser,
+    CanResetUserPassword,
+    IsGovernorateAdmin,
+    IsLibrarian,
+)
+from accounts.scopes import (
+    can_manage_user_status,
+    has_active_user_scope,
+    readers_searchable_by,
+    users_accessible_to,
+)
 from accounts.serializers import AdminPasswordResetSerializer
 
-from .serializers import *
-from django.core.mail import send_mail
-from django.conf import settings
-
-from books.serializers import * 
+from .serializers import (
+    ReaderSearchResultSerializer,
+    UserAdminCreateSerializer,
+    UserAdminSeri,
+)
 from rest_framework.pagination import PageNumberPagination
-from django.core.mail import EmailMultiAlternatives
 
 User = get_user_model() 
+
+class ReaderSearchPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 50
+
 
 class DashboardBookPagination(PageNumberPagination):
     page_size = 10
@@ -133,28 +157,6 @@ class BookAdminView( viewsets.ModelViewSet ) :
         book.save() 
         return Response({"MESSAGE" : "تمت الغاء الارشفة بنجاح"} , status = status.HTTP_200_OK ) 
     
-    @action(detail=True, methods=["get"], permission_classes=[AllowAny])
-    def summaries(self, request, pk=None):
-     book = self.get_object()
-     queryset = BookSummary.objects.filter(book=book).order_by("-created_at")
-     serializer = BookSummarySerializer(queryset, many=True)
-     return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    @action(
-    detail=True,
-    methods=["delete"],
-    permission_classes=[IsAdminUser],
-    url_path=r"summaries/(?P<summary_id>[^/.]+)",
-    )
-    def delete_summary(self, request, pk=None, summary_id=None):
-     book = self.get_object()
-     summary = BookSummary.objects.filter(id=summary_id, book=book).first()
-
-     if not summary:
-        return Response({"error": "لا يوجد تلخيص لهذا الكتاب "}, status=status.HTTP_404_NOT_FOUND)
-
-     summary.delete()
-     return Response({"message": "تم حذف التلخيص بنجاح"}, status=status.HTTP_200_OK)
 """
 ###BookAdminView
 
@@ -189,9 +191,9 @@ Returns a list of `BookSerializers` objects.
          operation_id="users_list",
          summary="قائمة المستخدمين ضمن نطاق مقدم الطلب",
          description=(
-             "النتائج scoped حسب السياسة الحالية: SUPERUSER لجميع المستخدمين الذين يعيدهم queryset الحالي، "
-             "MINISTRY_ADMIN لمستخدمي النظام، GOVERNORATE_ADMIN ضمن محافظته، "
-             "وLIBRARIAN لنفسه وReaders ضمن مكتبته. READER يخضع للصلاحيات الحالية."
+             "متاح لـGOVERNORATE_ADMIN فأعلى. SUPERUSER لجميع المستخدمين، MINISTRY_ADMIN لمستخدمي النظام، "
+             "GOVERNORATE_ADMIN ضمن محافظته (القراء حسب محافظتهم المباشرة والأمناء حسب محافظة مكتبتهم). "
+             "LIBRARIAN وREADER ممنوعان؛ يستخدم LIBRARIAN مسار reader-search."
          ),
          parameters=[
              OpenApiParameter(
@@ -214,7 +216,9 @@ Returns a list of `BookSerializers` objects.
          tags=["User Management"],
          operation_id="users_retrieve",
          summary="جلب مستخدم ضمن النطاق",
-         description="الهدف خارج scoped queryset يعاد كـNOT_FOUND دون كشف وجوده.",
+         description=(
+             "متاح لـGOVERNORATE_ADMIN فأعلى. الهدف خارج scoped queryset يعاد كـNOT_FOUND دون كشف وجوده."
+         ),
          responses={
              200: success_envelope(
                  "UserRetrieveSuccessEnvelope", UserAdminSeri(), ["USER_RETRIEVED"]
@@ -232,10 +236,11 @@ Returns a list of `BookSerializers` objects.
          description=(
              "الأدوار المسموحة: SUPERUSER ينشئ جميع Business roles؛ MINISTRY_ADMIN ينشئ "
              "GOVERNORATE_ADMIN/LIBRARIAN/READER؛ GOVERNORATE_ADMIN ينشئ LIBRARIAN/READER "
-             "ضمن محافظته؛ LIBRARIAN ينشئ READER ضمن مكتبته؛ READER ممنوع. "
-             "GOVERNORATE_ADMIN يحتاج governorate، وLIBRARIAN يحتاج library، وREADER يحتاج "
-             "library إلا عند إنشائه بواسطة LIBRARIAN حيث تُعين server-side. "
-             "is_staff وis_superuser ليسا مدخلين مسموحين."
+             "ضمن محافظته؛ LIBRARIAN ينشئ READER فقط؛ READER ممنوع. "
+             "GOVERNORATE_ADMIN يحتاج governorate، وLIBRARIAN يحتاج library دون governorate. "
+             "READER يرتبط بمحافظة دون مكتبة: الوزارة تحدد governorate، بينما تُعين محافظة "
+             "GOVERNORATE_ADMIN أو محافظة مكتبة LIBRARIAN server-side، وإرسال محافظة مختلفة يُرفض. "
+             "is_staff وis_superuser وgroups وuser_permissions ليست مدخلات مسموحة."
          ),
          request=UserAdminCreateSerializer,
          responses={
@@ -265,7 +270,17 @@ class UserAdminView(
          "list": ("USERS_RETRIEVED", "تم جلب قائمة المستخدمين بنجاح."),
          "retrieve": ("USER_RETRIEVED", "تم جلب بيانات المستخدم بنجاح."),
          "create": ("USER_CREATED", "تم إنشاء المستخدم بنجاح."),
+         "reader_search": ("READERS_RETRIEVED", "تم جلب نتائج البحث عن القراء بنجاح."),
      }
+     # General user listing, details and account status stay with governorate
+     # admins and above; librarians create readers and use reader_search only.
+     governorate_admin_actions = frozenset({"list", "retrieve", "deactivate", "reactivate"})
+     reader_search_min_length = 2
+
+     def get_permissions(self):
+         if self.action in self.governorate_admin_actions:
+             return [IsGovernorateAdmin(), CanAccessUser()]
+         return super().get_permissions()
 
      def get_serializer_class(self):
          if self.action == "create":
@@ -286,6 +301,72 @@ class UserAdminView(
              )
 
          return queryset
+
+     @extend_schema(
+         tags=["User Management"],
+         operation_id="users_reader_search",
+         summary="البحث عن قارئ لاختياره في الاستعارة",
+         description=(
+             "متاح لـLIBRARIAN فأعلى. LIBRARIAN يبحث ضمن محافظة مكتبته، GOVERNORATE_ADMIN ضمن محافظته، "
+             "وMINISTRY_ADMIN في جميع المحافظات. القراء الفعّالون فقط. عبارة البحث `q` إلزامية "
+             "(حرفان على الأقل) وتطابق username أو الاسم الأول أو الأخير جزئياً، أو البريد أو الهاتف تطابقاً تاماً. "
+             "النتائج مرتبة حسب username وتُعاد على صفحات."
+         ),
+         parameters=[
+             OpenApiParameter(name="q", type=str, required=True, description="عبارة البحث."),
+             OpenApiParameter(name="page", type=int, required=False),
+             OpenApiParameter(name="page_size", type=int, required=False, description="بحد أقصى 50."),
+         ],
+         responses={
+             200: success_envelope(
+                 "ReaderSearchSuccessEnvelope",
+                 inline_serializer(
+                     name="ReaderSearchPage",
+                     fields={
+                         "count": serializers.IntegerField(),
+                         "next": serializers.URLField(allow_null=True),
+                         "previous": serializers.URLField(allow_null=True),
+                         "results": ReaderSearchResultSerializer(many=True),
+                     },
+                 ),
+                 ["READERS_RETRIEVED"],
+             ),
+             400: error_response("VALIDATION_ERROR عند غياب عبارة البحث أو قصرها."),
+             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+             403: error_response("PERMISSION_DENIED."),
+             429: error_response("THROTTLED."),
+         },
+     )
+     @action(
+         detail=False,
+         methods=["get"],
+         permission_classes=[IsLibrarian],
+         url_path="reader-search",
+     )
+     def reader_search(self, request):
+         term = (request.query_params.get("q") or "").strip()
+         if len(term) < self.reader_search_min_length:
+             raise ValidationError(
+                 {"q": f"عبارة البحث مطلوبة ويجب ألا تقل عن {self.reader_search_min_length} أحرف."}
+             )
+
+         queryset = (
+             readers_searchable_by(request.user)
+             .filter(
+                 Q(username__icontains=term)
+                 | Q(first_name__icontains=term)
+                 | Q(last_name__icontains=term)
+                 | Q(email__iexact=term)
+                 | Q(phone=term)
+             )
+             .select_related("governorate")
+             .order_by("username", "id")
+         )
+
+         paginator = ReaderSearchPagination()
+         page = paginator.paginate_queryset(queryset, request, view=self)
+         serializer = ReaderSearchResultSerializer(page, many=True)
+         return paginator.get_paginated_response(serializer.data)
 
      def _set_borrowing_block(self, user, blocked):
          user.borrowing_blocked = blocked
@@ -396,7 +477,6 @@ class UserAdminView(
              data={
                 "user_id": user.id,
                 "borrowing_blocked": True,
-                "available_books": -1,
              },
              code="USER_BORROWING_BLOCKED",
              message="تم حظر الاستعارة للمستخدم بنجاح.",
@@ -429,21 +509,13 @@ class UserAdminView(
          url_path=r"unblock[_-]borrowing",
      )
      def unblock_borrowing(self, request, pk=None):
-         from books.views import get_user_tier
-
          user = self.get_object()
          self._set_borrowing_block(user, False)
-         tier, max_allowed = get_user_tier(user)
-         active_count = BorrowedBook.objects.filter(borrower=user, is_returned=False).count()
          return self.success_response(
              data={
                  "user_id": user.id,
                  "borrowing_blocked": False,
-                "tier": tier,
-                "max_allowed": max_allowed,
-                "active_borrows": active_count,
-                "available_books": 1,
-            },
+             },
              code="USER_BORROWING_UNBLOCKED",
              message="تم إلغاء حظر الاستعارة للمستخدم بنجاح.",
          )
@@ -616,28 +688,6 @@ Returns a list of `BarrowBookSerilaizers` objects.
 """
 
 
-class BookReservationAdminViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = BookReservationSerializer
-    permission_classes = [IsAdminUser]
-
-    def get_queryset(self):
-        queryset = BookReservation.objects.select_related("user", "book").order_by("reserved_at")
-        username = self.request.query_params.get("username")
-        book_name = self.request.query_params.get("book_name")
-
-        if username:
-            queryset = queryset.filter(
-                Q(user__username__icontains=username)
-                | Q(user__first_name__icontains=username)
-                | Q(user__last_name__icontains=username)
-            )
-
-        if book_name:
-            queryset = queryset.filter(book__title__icontains=book_name)
-
-        return queryset
-
-
 class DashboardStatsView ( APIView ) :
     permission_classes = [IsAdminUser] 
 
@@ -760,143 +810,3 @@ class AuthorAdminView( viewsets.ModelViewSet ) :
 Admin CRUD API for managing authors.
 
 """
-
-class LibraryActivityAdminViewSet(viewsets.ModelViewSet) : 
-    serializer_class = LibraryActivitySerializer
-    permission_classes = [IsAdminUser]
-    queryset = LibraryActivity.objects.all().order_by("-created_at")
-    
-    @action(detail=True,methods=["post"],permission_classes=[IsAdminUser]) 
-    def deactivate(self, request, pk=None) :
-        activity = self.get_object() 
-        activity.is_active = False
-        activity.save(update_fields=["is_active", "updated_at"])
-        return Response({"message": "تم إيقاف التسجيل على النشاط"}, status=status.HTTP_200_OK)
-    
-    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
-    def activate(self, request, pk=None):
-        activity = self.get_object()
-        activity.is_active = True
-        activity.save(update_fields=["is_active", "updated_at"])
-        return Response({"message": "تم تفعيل التسجيل على النشاط"}, status=status.HTTP_200_OK)
-    
-    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
-    def hide(self, request, pk=None):
-        activity = self.get_object()
-        activity.is_visible = False
-        activity.save(update_fields=["is_visible", "updated_at"])
-        return Response({"message": "تم إخفاء النشاط عن واجهة المستخدم"}, status=status.HTTP_200_OK)
-    
-    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
-    def show(self, request, pk=None):
-        activity = self.get_object()
-        activity.is_visible = True
-        activity.save(update_fields=["is_visible", "updated_at"])
-        return Response({"message": "تم إظهار النشاط للمستخدم"}, status=status.HTTP_200_OK)
-    
-    
-    @action(detail=True, methods=["get"], permission_classes=[IsAdminUser])
-    def participants(self, request, pk=None):
-     activity = self.get_object()
-     users = User.objects.filter(activity_registrations__activity=activity).distinct()
-     serializer = ActivityParticipantSerializer(users, many=True)
-     return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class QuoteAdminViewSet(viewsets.ModelViewSet):
-    serializer_class = QuoteAdminSerializer
-    permission_classes = [IsAdminUser]
-
-    def get_queryset(self):
-        queryset = Quote.objects.select_related("user", "approved_by").prefetch_related("likes__user").annotate(
-            likes_count=Count("likes", distinct=True)
-        ).order_by("-created_at")
-
-        status_value = self.request.query_params.get("status")
-        name = self.request.query_params.get("name")
-
-        if status_value:
-            queryset = queryset.filter(status=status_value)
-        if name :
-            queryset = queryset.filter(
-                Q(content__icontains=name)
-                | Q(user__username__icontains=name)
-                | Q(user__first_name__icontains=name)
-                | Q(user__last_name__icontains=name)
-            )
-
-        return queryset
-
-    def _send_quote_status_email(self, quote, is_approved):
-        if not quote.user.email:
-            return
-
-        if is_approved:
-            subject = "تهانينا! تم قبول خاطرتك"
-            message = (
-                f"مرحباً {quote.writer_full_name}،\n\n"
-                "تهانينا! تمت الموافقة على خاطرتك ونشرها بنجاح.\n"
-                "نتمنى لك المزيد من الإبداع.\n\n"
-                "فريق المكتبة"
-            )
-        else:
-            subject = "نعتذر، تم رفض خاطرتك"
-            message = (
-                f"مرحباً {quote.writer_full_name}،\n\n"
-                "نعتذر، تم رفض خاطرتك بعد المراجعة.\n"
-                "يمكنك تعديلها وإرسال خاطرة جديدة في أي وقت.\n\n"
-                "فريق المكتبة"
-            )
-
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            recipient_list=[quote.user.email],
-            fail_silently=True,
-        )
-    
-    def destroy(self, request, *args, **kwargs):
-        quote = self.get_object()
-        self.perform_destroy(quote)
-        return Response({"message": "تم حذف هذه الخاطرة بنجاح."}, status=status.HTTP_200_OK)
-    
-    def _validate_quote_is_pending(self, quote):
-        if quote.status != Quote.Status.PENDING:
-            return Response(
-                {
-                    "message": "لا يمكن تعديل حالة الخاطرة بعد حسمها (مقبولة أو مرفوضة).",
-                    "current_status": quote.status,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return None
-
-    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
-    def approve(self, request, pk=None):
-        quote = self.get_object()
-        validation_response = self._validate_quote_is_pending(quote)
-        if validation_response:
-            return validation_response
-
-        quote.status = Quote.Status.APPROVED
-        quote.approved_at = timezone.now()
-        quote.approved_by = request.user
-        quote.save(update_fields=["status", "approved_at", "approved_by", "updated_at"])
-        self._send_quote_status_email(quote, is_approved=True)
-        return Response({"message": "تمت الموافقة على الخاطرة بنجاح."}, status=status.HTTP_200_OK)
-
-    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
-    def reject(self, request, pk=None):
-        quote = self.get_object()
-        validation_response = self._validate_quote_is_pending(quote)
-        if validation_response:
-            return validation_response
-
-        quote.status = Quote.Status.REJECTED
-        quote.approved_at = None
-        quote.approved_by = None
-        quote.save(update_fields=["status", "approved_at", "approved_by", "updated_at"])
-        self._send_quote_status_email(quote, is_approved=False)
-        return Response({"message": "تم رفض الخاطرة."}, status=status.HTTP_200_OK)
-    

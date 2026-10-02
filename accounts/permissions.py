@@ -66,7 +66,7 @@ class CanAccessUser(BasePermission):
 
 
 class CanResetUserPassword(BasePermission):
-    """Allow password resets only for explicitly lower/in-scope business accounts."""
+    """Allow password resets by ministry and governorate admins for in-scope accounts."""
 
     def has_permission(self, request, view):
         user = request.user
@@ -76,7 +76,6 @@ class CanResetUserPassword(BasePermission):
             in {
                 CustomUser.Role.MINISTRY_ADMIN,
                 CustomUser.Role.GOVERNORATE_ADMIN,
-                CustomUser.Role.LIBRARIAN,
             }
         )
 
@@ -93,6 +92,4 @@ class CanResetUserPassword(BasePermission):
                 CustomUser.Role.LIBRARIAN,
                 CustomUser.Role.READER,
             }
-        if actor.role == CustomUser.Role.LIBRARIAN:
-            return can_access_user(actor, target) and target.role == CustomUser.Role.READER
         return False

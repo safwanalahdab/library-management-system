@@ -9,12 +9,15 @@ DOCUMENTED_API_METHODS = {
     ("accounts.views", "MeView"): {"GET"},
     ("accounts.views", "ProfileView"): {"GET", "PUT", "PATCH"},
     ("accounts.views", "ResetPasswordView"): {"POST"},
+    ("accounts.views", "RegisterView"): {"POST"},
+    ("accounts.views", "GovernorateListView"): {"GET"},
 }
 
 DOCUMENTED_USER_ACTIONS = {
     "list",
     "retrieve",
     "create",
+    "reader_search",
     "reset_password",
     "deactivate",
     "reactivate",
@@ -76,10 +79,17 @@ class ErrorEnvelopeSerializer(serializers.Serializer):
     meta = ResponseMetaSchemaSerializer()
 
 
+class GovernorateSummarySchemaSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+
+
 class LoginUserSchemaSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     username = serializers.CharField()
     role = RequesterRoleSchemaSerializer()
+    governorate = serializers.IntegerField(allow_null=True)
+    library = serializers.IntegerField(allow_null=True)
 
 
 class LoginDataSchemaSerializer(serializers.Serializer):
@@ -94,16 +104,11 @@ class AccessTokenDataSchemaSerializer(serializers.Serializer):
 class BorrowingBlockedDataSchemaSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
     borrowing_blocked = serializers.BooleanField()
-    available_books = serializers.IntegerField()
 
 
 class BorrowingUnblockedDataSchemaSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
     borrowing_blocked = serializers.BooleanField()
-    tier = serializers.CharField()
-    max_allowed = serializers.IntegerField()
-    active_borrows = serializers.IntegerField()
-    available_books = serializers.IntegerField()
 
 
 class ProfileUpdateSchemaSerializer(serializers.Serializer):

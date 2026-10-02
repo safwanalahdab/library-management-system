@@ -768,10 +768,7 @@ components:
           type: integer
         borrowing_blocked:
           type: boolean
-        available_books:
-          type: integer
       required:
-      - available_books
       - borrowing_blocked
       - user_id
     BorrowingUnblockedDataSchema:
@@ -781,20 +778,8 @@ components:
           type: integer
         borrowing_blocked:
           type: boolean
-        tier:
-          type: string
-        max_allowed:
-          type: integer
-        active_borrows:
-          type: integer
-        available_books:
-          type: integer
       required:
-      - active_borrows
-      - available_books
       - borrowing_blocked
-      - max_allowed
-      - tier
       - user_id
     Code205Enum:
       enum:
@@ -1068,12 +1053,6 @@ components:
         overdue_books_count:
           type: integer
           readOnly: true
-        favorites_count:
-          type: integer
-          readOnly: true
-        available_books:
-          type: integer
-          readOnly: true
         borrowing_blocked:
           type: boolean
           readOnly: true
@@ -1083,23 +1062,11 @@ components:
           readOnly: true
         profile:
           $ref: '#/components/schemas/UserDetails'
-        tier:
-          type: string
-          readOnly: true
-        activities:
-          type: array
-          items:
-            $ref: '#/components/schemas/UserActivity'
-          readOnly: true
       required:
-      - activities
-      - available_books
       - borrowed_books_count
       - borrowing_blocked
       - date_joined
-      - favorites_count
       - overdue_books_count
-      - tier
       - username
     ProfilePatchSuccessEnvelope:
       type: object
@@ -1260,49 +1227,6 @@ components:
       - TOKEN_REFRESHED
       type: string
       description: '* `TOKEN_REFRESHED` - TOKEN_REFRESHED'
-    UserActivity:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        activity_id:
-          type: integer
-          readOnly: true
-        activity_name:
-          type: string
-          readOnly: true
-        title:
-          type: string
-          readOnly: true
-        description:
-          type: string
-          readOnly: true
-        image:
-          type: string
-          format: uri
-          nullable: true
-          readOnly: true
-        is_active:
-          type: boolean
-          readOnly: true
-        is_visible:
-          type: boolean
-          readOnly: true
-        registered_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - activity_id
-      - activity_name
-      - description
-      - id
-      - image
-      - is_active
-      - is_visible
-      - registered_at
-      - title
     UserAdminCreate:
       type: object
       properties:

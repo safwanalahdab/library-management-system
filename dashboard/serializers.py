@@ -1,13 +1,12 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from accounts.serializers import ProfileSerializer, UserDetailsSerializer
+from accounts.serializers import UserDetailsSerializer
 from accounts.models import CustomUser
-from accounts.scopes import is_active_governorate, is_superuser
+from accounts.scopes import get_effective_governorate, is_active_governorate, is_superuser
 from Bookshelf.api_responses import get_user_role_meta
-from Bookshelf.openapi import RequesterRoleSchemaSerializer
+from Bookshelf.openapi import GovernorateSummarySchemaSerializer, RequesterRoleSchemaSerializer
 from drf_spectacular.utils import extend_schema_field
-from .models import * 
 
 User = get_user_model() 
 
@@ -130,15 +129,7 @@ class UserAdminCreateSerializer(serializers.ModelSerializer):
                 )
             attrs["library"] = None
 
-        elif role in {CustomUser.Role.LIBRARIAN, CustomUser.Role.READER}:
-            if actor.role == CustomUser.Role.LIBRARIAN and not is_superuser(actor):
-                if library is not None and library.pk != actor.library_id:
-                    raise serializers.ValidationError(
-                        {"library": "لا يمكنك إنشاء القارئ خارج مكتبتك."}
-                    )
-                library = actor.library
-                attrs["library"] = library
-
+        elif role == CustomUser.Role.LIBRARIAN:
             if library is None:
                 raise serializers.ValidationError(
                     {"library": "يجب تحديد مكتبة فعالة ضمن محافظة فعالة."}
@@ -161,9 +152,39 @@ class UserAdminCreateSerializer(serializers.ModelSerializer):
                 )
             if governorate is not None:
                 raise serializers.ValidationError(
-                    {"governorate": "أمين المكتبة والقارئ يرتبطان بالمكتبة فقط."}
+                    {"governorate": "أمين المكتبة يرتبط بالمكتبة فقط، ومحافظته تُعرف منها."}
                 )
             attrs["governorate"] = None
+
+        elif role == CustomUser.Role.READER:
+            if library is not None:
+                raise serializers.ValidationError(
+                    {"library": "القارئ لا يرتبط بمكتبة."}
+                )
+
+            if not is_superuser(actor) and actor.role in {
+                CustomUser.Role.GOVERNORATE_ADMIN,
+                CustomUser.Role.LIBRARIAN,
+            }:
+                actor_governorate = get_effective_governorate(actor)
+                if governorate is not None and (
+                    actor_governorate is None or governorate.pk != actor_governorate.pk
+                ):
+                    raise serializers.ValidationError(
+                        {"governorate": "لا يمكنك إنشاء قارئ خارج محافظتك."}
+                    )
+                governorate = actor_governorate
+
+            if governorate is None:
+                raise serializers.ValidationError(
+                    {"governorate": "يجب تحديد محافظة فعالة للقارئ."}
+                )
+            if not is_active_governorate(governorate):
+                raise serializers.ValidationError(
+                    {"governorate": "لا يمكن إنشاء قارئ ضمن محافظة غير فعالة."}
+                )
+            attrs["governorate"] = governorate
+            attrs["library"] = None
 
         password = attrs.get("password")
         candidate = User(**{key: value for key, value in attrs.items() if key != "password"})
@@ -181,51 +202,22 @@ class UserAdminCreateSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         representation["role"] = get_user_role_meta(instance)
         return representation
-        
 
-class ActivityParticipantSerializer(serializers.ModelSerializer):
+
+class ReaderSearchResultSerializer(serializers.ModelSerializer):
+    """Minimal reader identity used when selecting a borrower."""
+
+    full_name = serializers.SerializerMethodField()
+    governorate = serializers.SerializerMethodField()
+
+    def get_full_name(self, obj):
+        return obj.get_full_name().strip() or obj.username
+
+    @extend_schema_field(GovernorateSummarySchemaSerializer)
+    def get_governorate(self, obj):
+        return {"id": obj.governorate_id, "name": obj.governorate.name}
+
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name"]
-
-
-class LibraryActivitySerializer(serializers.ModelSerializer):
-    image = serializers.ImageField(use_url=True, allow_null=True, required=False)
-    participants_count = serializers.IntegerField(read_only=True)
-    is_registered = serializers.SerializerMethodField()
-    
-    def get_is_registered(self, obj):
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False
-
-        return ActivityRegistration.objects.filter(
-            activity=obj,
-            user=request.user,
-        ).exists()
-    
-    class Meta:
-        model = LibraryActivity
-        fields = [
-            "id",
-            "activity_name",
-            "title",
-            "image",
-            "description",
-            "is_active",
-            "is_visible",
-            "participants_count",
-            "is_registered",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "participants_count", "created_at", "updated_at"]
-
-
-class ActivityParticipantsListSerializer(serializers.ModelSerializer):
-    user = ActivityParticipantSerializer(read_only=True)
-
-    class Meta:
-        model = ActivityRegistration
-        fields = ["id", "user", "created_at"]
-
+        fields = ["id", "username", "first_name", "last_name", "full_name", "governorate"]
+        read_only_fields = fields

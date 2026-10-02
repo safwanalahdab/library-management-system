@@ -24,6 +24,16 @@ def get_effective_governorate(user):
     return None
 
 
+def get_effective_governorate_id(user):
+    if not is_authenticated_user(user):
+        return None
+    if user.governorate_id is not None:
+        return user.governorate_id
+    if user.library_id is not None:
+        return user.library.governorate_id
+    return None
+
+
 def get_effective_library(user):
     if not is_authenticated_user(user) or user.library_id is None:
         return None
@@ -35,10 +45,11 @@ def can_access_governorate(user, governorate):
         return False
     if is_superuser(user) or user.role == CustomUser.Role.MINISTRY_ADMIN:
         return True
-    return (
-        user.role == CustomUser.Role.GOVERNORATE_ADMIN
-        and user.governorate_id == governorate.pk
-    )
+    if user.role in {CustomUser.Role.GOVERNORATE_ADMIN, CustomUser.Role.READER}:
+        return user.governorate_id == governorate.pk
+    if user.role == CustomUser.Role.LIBRARIAN:
+        return get_effective_governorate_id(user) == governorate.pk
+    return False
 
 
 def can_access_library(user, library):
@@ -79,13 +90,8 @@ def can_access_user(actor, target):
             and actor.governorate_id == target_governorate.pk
         )
 
-    if actor.role == CustomUser.Role.LIBRARIAN:
-        return (
-            target.role == CustomUser.Role.READER
-            and actor.library_id is not None
-            and actor.library_id == target.library_id
-        )
-
+    # Librarians and readers only reach their own account here. Librarians
+    # find readers through readers_searchable_by(), which exposes limited data.
     return False
 
 
@@ -106,16 +112,34 @@ def users_accessible_to(actor):
                 governorate_id=actor.governorate_id,
             )
             | Q(
-                role__in={CustomUser.Role.LIBRARIAN, CustomUser.Role.READER},
+                role=CustomUser.Role.LIBRARIAN,
                 library__governorate_id=actor.governorate_id,
             )
-        )
-    if actor.role == CustomUser.Role.LIBRARIAN:
-        return queryset.filter(is_superuser=False).filter(
-            Q(pk=actor.pk)
-            | Q(role=CustomUser.Role.READER, library_id=actor.library_id)
+            | Q(
+                role=CustomUser.Role.READER,
+                governorate_id=actor.governorate_id,
+            )
         )
     return queryset.filter(pk=actor.pk)
+
+
+def readers_searchable_by(actor):
+    """Active readers an actor may look up when selecting a borrower."""
+    queryset = CustomUser.objects.filter(
+        role=CustomUser.Role.READER,
+        is_superuser=False,
+        is_active=True,
+    )
+    if not is_authenticated_user(actor):
+        return queryset.none()
+    if is_superuser(actor) or actor.role == CustomUser.Role.MINISTRY_ADMIN:
+        return queryset
+    if actor.role in {CustomUser.Role.GOVERNORATE_ADMIN, CustomUser.Role.LIBRARIAN}:
+        governorate_id = get_effective_governorate_id(actor)
+        if governorate_id is None:
+            return queryset.none()
+        return queryset.filter(governorate_id=governorate_id)
+    return queryset.none()
 
 
 def is_active_governorate(governorate):
@@ -152,8 +176,6 @@ def can_manage_user_status(actor, target):
             CustomUser.Role.LIBRARIAN,
             CustomUser.Role.READER,
         }
-    if actor.role == CustomUser.Role.LIBRARIAN:
-        return can_access_user(actor, target) and target.role == CustomUser.Role.READER
     return False
 
 
@@ -163,6 +185,8 @@ def has_active_user_scope(user):
         return user.governorate_id is None and user.library_id is None
     if user.role == CustomUser.Role.GOVERNORATE_ADMIN:
         return user.library_id is None and is_active_governorate(user.governorate)
-    if user.role in {CustomUser.Role.LIBRARIAN, CustomUser.Role.READER}:
+    if user.role == CustomUser.Role.LIBRARIAN:
         return user.governorate_id is None and is_active_library(user.library)
+    if user.role == CustomUser.Role.READER:
+        return user.library_id is None and is_active_governorate(user.governorate)
     return False

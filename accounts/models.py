@@ -42,7 +42,7 @@ class CustomUser(AbstractUser):
     governorate = models.ForeignKey(
         Governorate,
         on_delete=models.PROTECT,
-        related_name="administrators",
+        related_name="users",
         null=True,
         blank=True,
     )
@@ -72,7 +72,7 @@ class CustomUser(AbstractUser):
                     | models.Q(role="MINISTRY_ADMIN", governorate__isnull=True, library__isnull=True)
                     | models.Q(role="GOVERNORATE_ADMIN", governorate__isnull=False, library__isnull=True)
                     | models.Q(role="LIBRARIAN", governorate__isnull=True, library__isnull=False)
-                    | models.Q(role="READER", governorate__isnull=True, library__isnull=False)
+                    | models.Q(role="READER", governorate__isnull=False, library__isnull=True)
                 ),
                 name="accounts_user_role_scope_valid",
             )
@@ -92,16 +92,29 @@ class CustomUser(AbstractUser):
         if self.is_superuser:
             return
 
+        errors = {}
         if self.role == self.Role.MINISTRY_ADMIN:
-            valid = self.governorate_id is None and self.library_id is None
+            if self.governorate_id is not None:
+                errors["governorate"] = "مسؤول الوزارة لا يرتبط بمحافظة."
+            if self.library_id is not None:
+                errors["library"] = "مسؤول الوزارة لا يرتبط بمكتبة."
         elif self.role == self.Role.GOVERNORATE_ADMIN:
-            valid = self.governorate_id is not None and self.library_id is None
-        elif self.role in {self.Role.LIBRARIAN, self.Role.READER}:
-            valid = self.governorate_id is None and self.library_id is not None
+            if self.governorate_id is None:
+                errors["governorate"] = "يجب تحديد محافظة لمسؤول المحافظة."
+            if self.library_id is not None:
+                errors["library"] = "مسؤول المحافظة لا يرتبط بمكتبة."
+        elif self.role == self.Role.LIBRARIAN:
+            if self.library_id is None:
+                errors["library"] = "يجب تحديد مكتبة لأمين المكتبة."
+            if self.governorate_id is not None:
+                errors["governorate"] = "أمين المكتبة يرتبط بالمكتبة فقط، ومحافظته تُعرف منها."
+        elif self.role == self.Role.READER:
+            if self.governorate_id is None:
+                errors["governorate"] = "يجب تحديد محافظة للقارئ."
+            if self.library_id is not None:
+                errors["library"] = "القارئ لا يرتبط بمكتبة."
         else:
-            valid = False
+            errors["role"] = "الدور المحدد غير صالح."
 
-        if not valid:
-            raise ValidationError(
-                {"role": "The selected role does not match the required governorate and library scope."}
-            )
+        if errors:
+            raise ValidationError(errors)
