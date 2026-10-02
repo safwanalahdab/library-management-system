@@ -1,5 +1,5 @@
 from django.db import models
-from django.contrib.auth.models import User 
+from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from django.core.exceptions import ValidationError
@@ -88,7 +88,7 @@ class Book ( models.Model ) :
     
 class BorrowedBook ( models.Model ) :
      book = models.ForeignKey( Book , on_delete = models.CASCADE , related_name = "borrowed_book" ) 
-     borrower = models.ForeignKey( User , on_delete = models.CASCADE , related_name = "borrower_book") 
+     borrower = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete = models.CASCADE , related_name = "borrower_book") 
      borrow_date = models.DateField( auto_now_add = True ) 
      return_date = models.DateField( blank = True , null = True )
      is_returned = models.BooleanField( default = False ) 
@@ -123,7 +123,7 @@ class BorrowedBook ( models.Model ) :
     #Returns the number of days this borrowing is late.
      
 class Favorite_Book( models.Model ) : 
-   user =  models.ForeignKey( User , on_delete = models.CASCADE , related_name = "user_fav" ) 
+   user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete = models.CASCADE , related_name = "user_fav" ) 
    book = models.ForeignKey( Book , on_delete = models.CASCADE , related_name = "book_fav" ) 
    created_at = models.DateTimeField( auto_now_add = True ) 
    class Meta : 
@@ -136,7 +136,7 @@ class Favorite_Book( models.Model ) :
 
 
 class BookRating(models.Model):
-   user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="book_ratings")
+   user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="book_ratings")
    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="ratings")
    rating = models.PositiveSmallIntegerField(
       validators=[
@@ -162,7 +162,7 @@ class BookRating(models.Model):
 
 
 class BookReservation(models.Model):
-   user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="book_reservations")
+   user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="book_reservations")
    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="book_reservations")
    reserved_at = models.DateTimeField(auto_now_add=True)
 
@@ -180,7 +180,7 @@ class BookReservation(models.Model):
    
 class BookSummary(models.Model):
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name="summaries")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="book_summaries")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="book_summaries")
     summary = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -197,7 +197,7 @@ class Quote(models.Model):
         APPROVED = "approved", "تمت الموافقة"
         REJECTED = "rejected", "تم الرفض"
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="quotes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="quotes")
     content = models.TextField()
     status = models.CharField(
         max_length=20,
@@ -206,7 +206,7 @@ class Quote(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     approved_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -230,7 +230,7 @@ class Quote(models.Model):
 
 
 class QuoteLike(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="quote_likes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="quote_likes")
     quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name="likes")
     created_at = models.DateTimeField(auto_now_add=True)
 

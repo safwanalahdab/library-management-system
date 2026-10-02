@@ -9,15 +9,26 @@ from django.utils import timezone
 from django.http import HttpResponse
 from openpyxl import Workbook
 
-from rest_framework import status, viewsets
+from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAdminUser , IsAuthenticated ,AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 
+from Bookshelf.api_responses import ArabicApiResponseMixin
+from Bookshelf.openapi import (
+    BorrowingBlockedDataSchemaSerializer,
+    BorrowingUnblockedDataSchemaSerializer,
+    error_response,
+    success_envelope,
+)
 from books.models import *
 from books.serializers import *
-from accounts.models import UserProfile
+from accounts.permissions import CanAccessUser, CanResetUserPassword, IsLibrarian
+from accounts.scopes import can_manage_user_status, has_active_user_scope, users_accessible_to
+from accounts.serializers import AdminPasswordResetSerializer
 
 from .serializers import *
 from django.core.mail import send_mail
@@ -172,13 +183,97 @@ Returns a list of `BookSerializers` objects.
 
 """
 
-class UserAdminView( viewsets.ReadOnlyModelViewSet ) :
+@extend_schema_view(
+     list=extend_schema(
+         tags=["User Management"],
+         operation_id="users_list",
+         summary="قائمة المستخدمين ضمن نطاق مقدم الطلب",
+         description=(
+             "النتائج scoped حسب السياسة الحالية: SUPERUSER لجميع المستخدمين الذين يعيدهم queryset الحالي، "
+             "MINISTRY_ADMIN لمستخدمي النظام، GOVERNORATE_ADMIN ضمن محافظته، "
+             "وLIBRARIAN لنفسه وReaders ضمن مكتبته. READER يخضع للصلاحيات الحالية."
+         ),
+         parameters=[
+             OpenApiParameter(
+                 name="name",
+                 type=str,
+                 required=False,
+                 description="بحث جزئي في username أو الاسم الأول أو الأخير.",
+             )
+         ],
+         responses={
+             200: success_envelope(
+                 "UserListSuccessEnvelope", UserAdminSeri(many=True), ["USERS_RETRIEVED"]
+             ),
+             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+             403: error_response("PERMISSION_DENIED."),
+             429: error_response("THROTTLED."),
+         },
+     ),
+     retrieve=extend_schema(
+         tags=["User Management"],
+         operation_id="users_retrieve",
+         summary="جلب مستخدم ضمن النطاق",
+         description="الهدف خارج scoped queryset يعاد كـNOT_FOUND دون كشف وجوده.",
+         responses={
+             200: success_envelope(
+                 "UserRetrieveSuccessEnvelope", UserAdminSeri(), ["USER_RETRIEVED"]
+             ),
+             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+             403: error_response("PERMISSION_DENIED."),
+             404: error_response("NOT_FOUND، ويشمل الهدف خارج النطاق."),
+             429: error_response("THROTTLED."),
+         },
+     ),
+     create=extend_schema(
+         tags=["User Management"],
+         operation_id="users_create",
+         summary="إنشاء مستخدم",
+         description=(
+             "الأدوار المسموحة: SUPERUSER ينشئ جميع Business roles؛ MINISTRY_ADMIN ينشئ "
+             "GOVERNORATE_ADMIN/LIBRARIAN/READER؛ GOVERNORATE_ADMIN ينشئ LIBRARIAN/READER "
+             "ضمن محافظته؛ LIBRARIAN ينشئ READER ضمن مكتبته؛ READER ممنوع. "
+             "GOVERNORATE_ADMIN يحتاج governorate، وLIBRARIAN يحتاج library، وREADER يحتاج "
+             "library إلا عند إنشائه بواسطة LIBRARIAN حيث تُعين server-side. "
+             "is_staff وis_superuser ليسا مدخلين مسموحين."
+         ),
+         request=UserAdminCreateSerializer,
+         responses={
+             201: success_envelope(
+                 "UserCreateSuccessEnvelope",
+                 UserAdminCreateSerializer(),
+                 ["USER_CREATED"],
+             ),
+             400: error_response("VALIDATION_ERROR مع أخطاء role أو governorate أو library أو password أو username."),
+             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+             403: error_response("PERMISSION_DENIED."),
+             429: error_response("THROTTLED."),
+         },
+     ),
+)
+class UserAdminView(
+     ArabicApiResponseMixin,
+     mixins.CreateModelMixin,
+     mixins.ListModelMixin,
+     mixins.RetrieveModelMixin,
+     viewsets.GenericViewSet,
+) :
      serializer_class = UserAdminSeri 
-     permission_classes = [IsAdminUser] 
+     permission_classes = [IsLibrarian, CanAccessUser]
      queryset = User.objects.all()
+     success_response_messages = {
+         "list": ("USERS_RETRIEVED", "تم جلب قائمة المستخدمين بنجاح."),
+         "retrieve": ("USER_RETRIEVED", "تم جلب بيانات المستخدم بنجاح."),
+         "create": ("USER_CREATED", "تم إنشاء المستخدم بنجاح."),
+     }
+
+     def get_serializer_class(self):
+         if self.action == "create":
+             return UserAdminCreateSerializer
+         return UserAdminSeri
      
      def get_queryset(self) :
-         queryset = User.objects.annotate(
+         queryset = users_accessible_to(self.request.user).annotate(
              borrowed_books_count = Count('borrower_book' , filter = Q( borrower_book__is_returned = False ))
          )
 
@@ -193,34 +288,144 @@ class UserAdminView( viewsets.ReadOnlyModelViewSet ) :
          return queryset
 
      def _set_borrowing_block(self, user, blocked):
-         profile, _ = UserProfile.objects.get_or_create(user=user)
-         profile.borrowing_blocked = blocked
-         profile.save(update_fields=["borrowing_blocked"])
-         return profile
+         user.borrowing_blocked = blocked
+         user.save(update_fields=["borrowing_blocked"])
+         return user
 
+     def _set_active_status(self, request, user, active):
+         if not can_manage_user_status(request.user, user):
+             raise PermissionDenied("لا تملك صلاحية إدارة هذا المستخدم.")
+         if active and not has_active_user_scope(user):
+             raise ValidationError(
+                 {"detail": "لا يمكن إعادة تفعيل المستخدم لأن نطاقه التنظيمي غير فعال."}
+             )
+         changed = user.is_active != active
+         if changed:
+             user.is_active = active
+             user.save(update_fields=["is_active"])
+         return changed
+
+     @extend_schema(
+         tags=["User Management"],
+         operation_id="user_deactivate",
+         summary="تعطيل حساب مستخدم",
+         description="لا يحذف الحساب. يخضع للصلاحيات والنطاق الحاليين.",
+         request=None,
+         responses={
+             200: success_envelope(
+                 "UserDeactivateSuccessEnvelope",
+                 serializers.JSONField(allow_null=True),
+                 ["USER_DEACTIVATED", "USER_ALREADY_INACTIVE"],
+             ),
+             400: error_response("VALIDATION_ERROR للحالات business-invalid."),
+             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+             403: error_response("PERMISSION_DENIED."),
+             404: error_response("NOT_FOUND للهدف خارج النطاق."),
+             429: error_response("THROTTLED."),
+         },
+     )
+     @action(detail=True, methods=["post"], url_path="deactivate")
+     def deactivate(self, request, pk=None):
+         user = self.get_object()
+         changed = self._set_active_status(request, user, False)
+         return self.success_response(
+             data=None,
+             code="USER_DEACTIVATED" if changed else "USER_ALREADY_INACTIVE",
+             message="تم تعطيل حساب المستخدم بنجاح." if changed else "الحساب معطل بالفعل.",
+         )
+
+     @extend_schema(
+         tags=["User Management"],
+         operation_id="user_reactivate",
+         summary="إعادة تفعيل حساب مستخدم",
+         description="لا ينشئ حسابًا جديدًا، ويتحقق من بقاء النطاق التنظيمي فعالًا.",
+         request=None,
+         responses={
+             200: success_envelope(
+                 "UserReactivateSuccessEnvelope",
+                 serializers.JSONField(allow_null=True),
+                 ["USER_REACTIVATED", "USER_ALREADY_ACTIVE"],
+             ),
+             400: error_response("VALIDATION_ERROR، بما فيه النطاق التنظيمي غير الفعال."),
+             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+             403: error_response("PERMISSION_DENIED."),
+             404: error_response("NOT_FOUND للهدف خارج النطاق."),
+             429: error_response("THROTTLED."),
+         },
+     )
+     @action(detail=True, methods=["post"], url_path="reactivate")
+     def reactivate(self, request, pk=None):
+         user = self.get_object()
+         changed = self._set_active_status(request, user, True)
+         return self.success_response(
+             data=None,
+             code="USER_REACTIVATED" if changed else "USER_ALREADY_ACTIVE",
+             message="تم تفعيل حساب المستخدم بنجاح." if changed else "الحساب فعال بالفعل.",
+         )
+
+     @extend_schema(
+         tags=["User Management"],
+         operation_id="user_block_borrowing",
+         summary="حظر الاستعارة لمستخدم",
+         description=(
+             "المسار الفعلي يقبل `block_borrowing` و`block-borrowing` بسبب url_path الحالي."
+         ),
+         request=None,
+         responses={
+             200: success_envelope(
+                 "UserBorrowingBlockedSuccessEnvelope",
+                 BorrowingBlockedDataSchemaSerializer(),
+                 ["USER_BORROWING_BLOCKED"],
+             ),
+             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+             403: error_response("PERMISSION_DENIED."),
+             404: error_response("NOT_FOUND للهدف خارج النطاق."),
+             429: error_response("THROTTLED."),
+         },
+     )
      @action(
          detail=True,
          methods=["post"],
-         permission_classes=[IsAdminUser],
+         permission_classes=[IsLibrarian, CanAccessUser],
          url_path=r"block[_-]borrowing",
      )
      def block_borrowing(self, request, pk=None):
          user = self.get_object()
          self._set_borrowing_block(user, True)
-         return Response(
-             {
-                "message": "تم حجب المستخدم عن الاستعارة بنجاح",
+         return self.success_response(
+             data={
                 "user_id": user.id,
                 "borrowing_blocked": True,
                 "available_books": -1,
              },
-             status=status.HTTP_200_OK,
+             code="USER_BORROWING_BLOCKED",
+             message="تم حظر الاستعارة للمستخدم بنجاح.",
          )
 
+     @extend_schema(
+         tags=["User Management"],
+         operation_id="user_unblock_borrowing",
+         summary="إلغاء حظر الاستعارة لمستخدم",
+         description=(
+             "المسار الفعلي يقبل `unblock_borrowing` و`unblock-borrowing` بسبب url_path الحالي."
+         ),
+         request=None,
+         responses={
+             200: success_envelope(
+                 "UserBorrowingUnblockedSuccessEnvelope",
+                 BorrowingUnblockedDataSchemaSerializer(),
+                 ["USER_BORROWING_UNBLOCKED"],
+             ),
+             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+             403: error_response("PERMISSION_DENIED."),
+             404: error_response("NOT_FOUND للهدف خارج النطاق."),
+             429: error_response("THROTTLED."),
+         },
+     )
      @action(
          detail=True,
          methods=["post"],
-         permission_classes=[IsAdminUser],
+         permission_classes=[IsLibrarian, CanAccessUser],
          url_path=r"unblock[_-]borrowing",
      )
      def unblock_borrowing(self, request, pk=None):
@@ -230,9 +435,8 @@ class UserAdminView( viewsets.ReadOnlyModelViewSet ) :
          self._set_borrowing_block(user, False)
          tier, max_allowed = get_user_tier(user)
          active_count = BorrowedBook.objects.filter(borrower=user, is_returned=False).count()
-         return Response(
-             {
-                 "message": "تم فك حجب الاستعارة عن المستخدم بنجاح",
+         return self.success_response(
+             data={
                  "user_id": user.id,
                  "borrowing_blocked": False,
                 "tier": tier,
@@ -240,7 +444,48 @@ class UserAdminView( viewsets.ReadOnlyModelViewSet ) :
                 "active_borrows": active_count,
                 "available_books": 1,
             },
-             status=status.HTTP_200_OK,
+             code="USER_BORROWING_UNBLOCKED",
+             message="تم إلغاء حظر الاستعارة للمستخدم بنجاح.",
+         )
+
+     @extend_schema(
+         tags=["User Management"],
+         operation_id="user_reset_password",
+         summary="إعادة تعيين كلمة مرور مستخدم",
+         description="الصلاحية تعتمد على الدور والنطاق، ولا يسمح بإعادة تعيين كلمة مرور الذات حسب السياسة الحالية.",
+         request=AdminPasswordResetSerializer,
+         responses={
+             200: success_envelope(
+                 "UserPasswordResetSuccessEnvelope",
+                 serializers.JSONField(allow_null=True),
+                 ["USER_PASSWORD_RESET"],
+             ),
+             400: error_response("VALIDATION_ERROR لتطابق أو قوة كلمة المرور."),
+             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+             403: error_response("PERMISSION_DENIED."),
+             404: error_response("NOT_FOUND للهدف خارج النطاق."),
+             429: error_response("THROTTLED."),
+         },
+     )
+     @action(
+         detail=True,
+         methods=["post"],
+         permission_classes=[CanResetUserPassword],
+         url_path="reset-password",
+     )
+     def reset_password(self, request, pk=None):
+         user = self.get_object()
+         self.check_object_permissions(request, user)
+         serializer = AdminPasswordResetSerializer(
+             data=request.data,
+             context={"user": user},
+         )
+         serializer.is_valid(raise_exception=True)
+         serializer.save()
+         return self.success_response(
+             data=None,
+             code="USER_PASSWORD_RESET",
+             message="تم إعادة تعيين كلمة المرور بنجاح.",
          )
      
 """

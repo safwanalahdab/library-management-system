@@ -64,10 +64,7 @@ class BookSerializers ( serializers.ModelSerializer ) :
         return self._available_books_for_user
 
     def _calculate_available_books(self, user):
-        from accounts.models import UserProfile
-
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-        if profile.borrowing_blocked:
+        if user.borrowing_blocked:
             return -1
 
         read_books_count = (

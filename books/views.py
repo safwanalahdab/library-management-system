@@ -24,10 +24,7 @@ class DashboardBookPagination(PageNumberPagination):
 
  
 def get_user_tier( user ) :
-    from accounts.models import UserProfile
-
-    profile, _ = UserProfile.objects.get_or_create(user=user)
-    if profile.borrowing_blocked:
+    if user.borrowing_blocked:
        return "blocked" , -1
 
     read_books_count = (

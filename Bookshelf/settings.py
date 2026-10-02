@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import timedelta
 import os
 from corsheaders.defaults import default_headers
 import dj_database_url
@@ -40,7 +41,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
 
     "rest_framework",
-    "rest_framework.authtoken",
+    "drf_spectacular",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
 
     "books",
@@ -49,19 +51,43 @@ INSTALLED_APPS = [
     "dashboard",
 ]
 
+AUTH_USER_MODEL = "accounts.CustomUser"
+
 # -----------------------------
 # REST Framework
 # -----------------------------
 REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "Bookshelf.api_responses.custom_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
     ],
 }
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Library Management System API",
+    "DESCRIPTION": "توثيق API لنظام إدارة المكتبة",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "PREPROCESSING_HOOKS": ["Bookshelf.openapi.keep_documented_endpoints"],
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": False,
+}
+
+JWT_REFRESH_COOKIE_NAME = "refresh_token"
+JWT_REFRESH_COOKIE_PATH = "/accounts/"
+JWT_REFRESH_COOKIE_SECURE = env_bool("JWT_REFRESH_COOKIE_SECURE", not DEBUG)
+JWT_REFRESH_COOKIE_SAMESITE = os.getenv("JWT_REFRESH_COOKIE_SAMESITE", "Lax")
 
 # -----------------------------
 # Middleware
@@ -85,7 +111,7 @@ MIDDLEWARE = [
 ROOT_URLCONF = "Bookshelf.urls"
 
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = False
+CORS_ALLOW_CREDENTIALS = True
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")

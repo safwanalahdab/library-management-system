@@ -11,10 +11,11 @@ router.register('FavoriteBooksProfileView', FavoriteBooksProfileView , basename 
 urlpatterns = [
       path('register' , RegisterView.as_view() , name = "register" ) ,
       path('login' , LoginView.as_view() , name = "login" ) ,
+      path('refresh' , RefreshView.as_view() , name = "refresh" ) ,
       path('logout' , LogoutView.as_view() , name = "logout" ) ,
+      path('me' , MeView.as_view() , name = "me" ) ,
       path('change_password' , ResetPasswordView.as_view() , name = "change_password" ) ,
       path('profile' , ProfileView.as_view() , name = "profile" ) ,
       path('', include( router.urls ) ) ,
-      path('VerifyTokenAndRoleView' , VerifyTokenAndRoleView.as_view() , name = "VerifyTokenAndRoleView" ) 
 ]
 

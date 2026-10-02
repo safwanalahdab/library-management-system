@@ -1,0 +1,1195 @@
+[
+  {
+    "model": "books.author",
+    "pk": 1,
+    "fields": {
+      "name": "محمد"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 2,
+    "fields": {
+      "name": "نزار قباني"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 3,
+    "fields": {
+      "name": "احمد شوقي"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 5,
+    "fields": {
+      "name": "سمير البعلبكي"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 6,
+    "fields": {
+      "name": "الان كرييف"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 7,
+    "fields": {
+      "name": "طارق السويدان"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 8,
+    "fields": {
+      "name": "مايكل فينر"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 9,
+    "fields": {
+      "name": "مايكل زيمرمان"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 10,
+    "fields": {
+      "name": "مايكل زيمرمان"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 11,
+    "fields": {
+      "name": "كرين برينتون"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 12,
+    "fields": {
+      "name": "مصطفى محمود"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 13,
+    "fields": {
+      "name": "عصام القصاب"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 14,
+    "fields": {
+      "name": "هاشيت أنطوان"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 15,
+    "fields": {
+      "name": "هوبر حدّاد"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 16,
+    "fields": {
+      "name": "عبدالرحمن الرافعي"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 17,
+    "fields": {
+      "name": "إسماعيل محمود علي"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 18,
+    "fields": {
+      "name": "محمد سهيل طقوش"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 19,
+    "fields": {
+      "name": "أبو عبد الله محمد بن ظفر الصقلي"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 20,
+    "fields": {
+      "name": "غسان كنفاني"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 21,
+    "fields": {
+      "name": "سليم بن قيس الهلالي"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 22,
+    "fields": {
+      "name": "علي الوردي"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 23,
+    "fields": {
+      "name": "ريم بسيوني"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 24,
+    "fields": {
+      "name": "فلسفة"
+    }
+  },
+  {
+    "model": "books.author",
+    "pk": 25,
+    "fields": {
+      "name": "محمد رستم"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 1,
+    "fields": {
+      "name": "تاريخ"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 2,
+    "fields": {
+      "name": "شعر"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 3,
+    "fields": {
+      "name": "روايات"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 5,
+    "fields": {
+      "name": "إدارة الأفراد"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 6,
+    "fields": {
+      "name": "علم نفس التطبيقي"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 7,
+    "fields": {
+      "name": "متفرقات الفلسفة"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 8,
+    "fields": {
+      "name": "المعاملة التاريخية والجغرافية"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 9,
+    "fields": {
+      "name": "علم الوجود"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 10,
+    "fields": {
+      "name": "تاريخ وجغرافيا"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 11,
+    "fields": {
+      "name": "اقتصاد"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 12,
+    "fields": {
+      "name": "تاريخ إسلامي"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 13,
+    "fields": {
+      "name": "سياسة"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 14,
+    "fields": {
+      "name": "فكر وثقافة"
+    }
+  },
+  {
+    "model": "books.category",
+    "pk": 15,
+    "fields": {
+      "name": "تصوف"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 3,
+    "fields": {
+      "title": "تاريخ العرب",
+      "description": "تاريخ العرب والمسلمين",
+      "image": "books/photo_٢٠٢٥-١٠-٣١_٢٠-٤٠-٥٦.jpg",
+      "author": 1,
+      "category": 1,
+      "total_copies": 5,
+      "available_copies": 0,
+      "count_borrowed": 1,
+      "created_at": "2025-11-06T10:00:50.198219+00:00",
+      "is_avaiable": false,
+      "possition": "B1",
+      "is_archived": true,
+      "pages": 312,
+      "publication_year": 2014,
+      "isbn": "023"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 5,
+    "fields": {
+      "title": "تطوير اساليب الادارة",
+      "description": "تطوير اساليب الادارة",
+      "image": "books/images.jpg",
+      "author": 5,
+      "category": 5,
+      "total_copies": 2,
+      "available_copies": 1,
+      "count_borrowed": 5,
+      "created_at": "2025-11-13T17:37:08.720550+00:00",
+      "is_avaiable": true,
+      "possition": "C1",
+      "is_archived": false,
+      "pages": 341,
+      "publication_year": 2014,
+      "isbn": "023"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 6,
+    "fields": {
+      "title": "دليل المدير لتجنب الاخطاء",
+      "description": "دليل المدير لتجنب الاخطاء",
+      "image": "books/images_1.jpg",
+      "author": 6,
+      "category": 5,
+      "total_copies": 2,
+      "available_copies": 1,
+      "count_borrowed": 2,
+      "created_at": "2025-11-13T17:42:46.372942+00:00",
+      "is_avaiable": true,
+      "possition": "C4",
+      "is_archived": false,
+      "pages": 141,
+      "publication_year": 2001,
+      "isbn": "023"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 14,
+    "fields": {
+      "title": "صناعة القائد",
+      "description": "صناعة القائد",
+      "image": "books/images_3.jpg",
+      "author": 7,
+      "category": 6,
+      "total_copies": 1,
+      "available_copies": 1,
+      "count_borrowed": 6,
+      "created_at": "2025-11-25T12:58:42.362483+00:00",
+      "is_avaiable": true,
+      "possition": "A3",
+      "is_archived": false,
+      "pages": 150,
+      "publication_year": 2015,
+      "isbn": "023"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 18,
+    "fields": {
+      "title": "آدم وزينب من المحيط إلى الخليج",
+      "description": "\"نادرةٌ هي الروايات التي تحاكي جيل الشباب المسلم في عالم اليوم، إذ تتحدّث عن حبٍّ يتماشى مع العصر الذين ينتمون إليه بحداثته وتطوره، وفي الوقت نفسه يراعي قيمهم الاجتماعية، وينسجم مع هويتهم الثقافية. لا بل قد تكون هذه الروايات شبه غائبة تمامًا عن رفوف المكتبات. إلى أن جاءت قصة آدم",
+      "image": "books/423634.jpg",
+      "author": 14,
+      "category": 3,
+      "total_copies": 1,
+      "available_copies": 1,
+      "count_borrowed": 2,
+      "created_at": "2025-12-23T13:57:10.493433+00:00",
+      "is_avaiable": true,
+      "possition": "A2",
+      "is_archived": false,
+      "pages": 288,
+      "publication_year": 2025,
+      "isbn": "9786140604254"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 19,
+    "fields": {
+      "title": "فلسطين",
+      "description": "رواية للكاتب هوبر حدّاد (Hubert Haddad)",
+      "image": "books/420019.jpg",
+      "author": 15,
+      "category": 3,
+      "total_copies": 1,
+      "available_copies": 1,
+      "count_borrowed": 2,
+      "created_at": "2025-12-23T14:01:09.292032+00:00",
+      "is_avaiable": true,
+      "possition": "M4",
+      "is_archived": false,
+      "pages": 255,
+      "publication_year": 2007,
+      "isbn": "9782843044212"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 20,
+    "fields": {
+      "title": "مذكراتي",
+      "description": "مذكرات المؤرخ والمحامي المصري عبد الرحمن الرافعي، يروي فيها جانبًا من سيرته وتجربته الوطنية، ويعرض مشاهداته لأحداث سياسية وتاريخية بارزة شهدتها مصر في النصف الأول من القرن العشرين حتى عام 1951",
+      "image": "books/317200.jpg",
+      "author": 16,
+      "category": 10,
+      "total_copies": 3,
+      "available_copies": 3,
+      "count_borrowed": 0,
+      "created_at": "2025-12-23T14:05:23.202719+00:00",
+      "is_avaiable": true,
+      "possition": "H1",
+      "is_archived": false,
+      "pages": 329,
+      "publication_year": 2020,
+      "isbn": "9789776959439"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 21,
+    "fields": {
+      "title": "تاريخ الفكر الاقتصادي",
+      "description": "مرجع جامعي يستعرض تطوّر المدارس والنظريات في الفكر الاقتصادي عبر المراحل التاريخية",
+      "image": "books/تاريخ_الفكر.jpg",
+      "author": 17,
+      "category": 11,
+      "total_copies": 3,
+      "available_copies": 3,
+      "count_borrowed": 3,
+      "created_at": "2025-12-23T14:08:31.673759+00:00",
+      "is_avaiable": true,
+      "possition": "M12",
+      "is_archived": false,
+      "pages": 391,
+      "publication_year": 2011,
+      "isbn": "9796500016795"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 22,
+    "fields": {
+      "title": "تاريخ الزنج والقرامطة والحشاشين",
+      "description": "كتاب تاريخي يتناول ثلاث حركات معارضة بارزة أثّرت في تاريخ الدولة العباسية: ثورة الزنج، حركة القرامطة، وحركة الحشاشين، مع عرض لخلفياتها وأحداثها ونتائجها.",
+      "image": "books/241834.jpg",
+      "author": 18,
+      "category": 12,
+      "total_copies": 2,
+      "available_copies": 2,
+      "count_borrowed": 4,
+      "created_at": "2025-12-23T14:12:31.363265+00:00",
+      "is_avaiable": true,
+      "possition": "B43",
+      "is_archived": false,
+      "pages": 312,
+      "publication_year": 211,
+      "isbn": "9789953185347"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 23,
+    "fields": {
+      "title": "السياسة والحيلة عند العرب رقائق الحلل في دقائق الحيل",
+      "description": "كتاب تراثي في الأدب السياسي العربي، يتناول فنون السياسة والحيلة وأساليب التدبير والدهاء كما عالجها التراث العربي، مع أمثلة وحكايات تُبرز البعد الأخلاقي والفكري في إدارة الشأن العام",
+      "image": "books/21860.jpg",
+      "author": 19,
+      "category": 13,
+      "total_copies": 77,
+      "available_copies": 77,
+      "count_borrowed": 5,
+      "created_at": "2025-12-23T14:15:24.262288+00:00",
+      "is_avaiable": true,
+      "possition": "B43",
+      "is_archived": false,
+      "pages": 240,
+      "publication_year": 2017,
+      "isbn": "14134135139"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 24,
+    "fields": {
+      "title": "جذور العبقرية وتجلياتها الإبداعية",
+      "description": "كتاب فكري يتناول مفهوم العبقرية من جذورها النفسية والثقافية، ويحلّل تجلياتها الإبداعية في مجالات الفكر والأدب والفن، مع مناقشة العوامل التي تسهم في تكوين المبدع وصقل قدراته",
+      "image": "books/241803.jpg",
+      "author": 20,
+      "category": 14,
+      "total_copies": 1,
+      "available_copies": 1,
+      "count_borrowed": 3,
+      "created_at": "2025-12-23T14:17:39.263669+00:00",
+      "is_avaiable": true,
+      "possition": "E2",
+      "is_archived": false,
+      "pages": 141,
+      "publication_year": 2015,
+      "isbn": "9796500016795"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 26,
+    "fields": {
+      "title": "راحة العقل",
+      "description": "كتاب فكري اجتماعي للدكتور علي الوردي يناقش فيه الصراع بين العقل والواقع الاجتماعي، وينتقد المثالية الزائدة، داعيًا إلى فهم النفس البشرية والمجتمع بواقعية تؤدي إلى راحة العقل وتخفيف التوتر الفكري.",
+      "image": "books/11708.jpg",
+      "author": 22,
+      "category": 14,
+      "total_copies": 1,
+      "available_copies": 1,
+      "count_borrowed": 1,
+      "created_at": "2025-12-23T14:26:42.022975+00:00",
+      "is_avaiable": true,
+      "possition": "SOC-01",
+      "is_archived": false,
+      "pages": 192,
+      "publication_year": 2013,
+      "isbn": "9789776959439"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 27,
+    "fields": {
+      "title": "برفقة أبي حامد الغزالي: إصلاح القلب",
+      "description": "كتاب روحي وفكري للدكتورة ريم بسيوني تصحب فيه القارئ في رحلة داخل أنحاء القلب مستلهمةً فكر الإمام أبي حامد الغزالي حول إصلاح النفس والقلب السليم. يتناول الكتاب آفات القلوب وطرق علاجها، وكيف يمكن للإنسان أن يعيش في الدنيا بين الناس بقلب حاضر وسليم بعيد عن القسوة والظلمة، مع تأملات في التجربة الصوفية ومعاني التزكية والسكينة.",
+      "image": "books/310949.jpg",
+      "author": 23,
+      "category": null,
+      "total_copies": 1,
+      "available_copies": 1,
+      "count_borrowed": 0,
+      "created_at": "2025-12-23T14:31:40.052032+00:00",
+      "is_avaiable": true,
+      "possition": "B43",
+      "is_archived": false,
+      "pages": 410,
+      "publication_year": 2025,
+      "isbn": "6222018423143"
+    }
+  },
+  {
+    "model": "books.book",
+    "pk": 28,
+    "fields": {
+      "title": "الكون وسحر الحياة",
+      "description": "الكتاب يناقش تحديات فهم سر الوجود والكون من منظور علمي وفلسفي، ويستعرض أفكارًا عن المعرفة واللايقين، ويمتد إلى طرح أن الكون لا مركز له وأن فهمه يحتاج إلى نظريات واضحة يستطيع الإنسان إدراكها. بينما يربط أيضًا المادة وتطورها على الأرض بسحر الحياة وغموضها.",
+      "image": "books/131392.jpg",
+      "author": 25,
+      "category": 14,
+      "total_copies": 1,
+      "available_copies": 1,
+      "count_borrowed": 2,
+      "created_at": "2025-12-24T19:04:46.464690+00:00",
+      "is_avaiable": true,
+      "possition": "H1",
+      "is_archived": false,
+      "pages": 148,
+      "publication_year": 2004,
+      "isbn": "9782843044212"
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 8,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$AC6KxQGgo3fSdfv7O5bDAL$fKeyM2ONi1ATsWpV5mNxeI6nITIpqZ2ZV42gHw5cSx0=",
+      "last_login": "2026-01-02T17:45:52.902440+00:00",
+      "is_superuser": true,
+      "username": "safo",
+      "first_name": "safwan",
+      "last_name": "alahdab",
+      "email": "safwan.adnan4541@gmail.com",
+      "is_staff": true,
+      "is_active": true,
+      "date_joined": "2025-11-24T12:11:14+00:00",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 19,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$rZcRi1kTve0rj3ejcdKXmw$k2WRW6DkfIIMFedDxxnzXIY1EwRwMit2FAhwLMhFN8c=",
+      "last_login": "2025-12-11T20:17:45.317033+00:00",
+      "is_superuser": false,
+      "username": "ahmad",
+      "first_name": "ahmad",
+      "last_name": "altayar",
+      "email": "ahmad@gmail.com",
+      "is_staff": false,
+      "is_active": true,
+      "date_joined": "2025-12-11T20:17:44.614249+00:00",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 29,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$GUyyDIhgGtF9wiJAVxSWlc$LuBx/iz2jPopRDPmZa4Tn1+/FAyLjiKyCzNopVZL7u8=",
+      "last_login": "2025-12-25T20:23:04.053855+00:00",
+      "is_superuser": false,
+      "username": "abood",
+      "first_name": "abd",
+      "last_name": "ahdab",
+      "email": "abds@gmail.com",
+      "is_staff": false,
+      "is_active": true,
+      "date_joined": "2025-12-25T20:23:03.553831+00:00",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 30,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$2EhI0bM5UYY0a1ZSoeuVol$qxEtAA+q0fSSGWwuHIiPaNblFtYR3ymt8LXln2IHNMs=",
+      "last_login": null,
+      "is_superuser": false,
+      "username": "ALIKING",
+      "first_name": "ali",
+      "last_name": "tayar",
+      "email": "alosh@gmail.com",
+      "is_staff": true,
+      "is_active": true,
+      "date_joined": "2025-12-26T11:41:13+00:00",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 37,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$MYXo5rhBUu4CKSoB0XF40c$CmbH4rqjSSUmVVvZw6J3OTQ6+iI+eqwueUsk+6KMvME=",
+      "last_login": "2025-12-28T07:06:25.130474+00:00",
+      "is_superuser": false,
+      "username": "test2",
+      "first_name": "testt",
+      "last_name": "test",
+      "email": "ali.altayar.develop2er@gmail.com",
+      "is_staff": false,
+      "is_active": true,
+      "date_joined": "2025-12-28T07:06:24.628822+00:00",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 38,
+    "fields": {
+      "password": "pbkdf2_sha256$1000000$obfLf1VCH9U4FdaEHoNxxp$r4axzrQC571WImuxh2XA3nIiFNKPUF7IzOlUZsYOa3M=",
+      "last_login": "2026-01-02T17:44:09.073153+00:00",
+      "is_superuser": false,
+      "username": "mohammad_da",
+      "first_name": "محمد",
+      "last_name": "دلة",
+      "email": "abomoutez2001m@gmail.com",
+      "is_staff": false,
+      "is_active": true,
+      "date_joined": "2026-01-02T17:44:08.234903+00:00",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 20,
+    "fields": {
+      "book": 5,
+      "borrower": 8,
+      "borrow_date": "2025-11-24",
+      "return_date": null,
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": null,
+      "due_date": null
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 29,
+    "fields": {
+      "book": 5,
+      "borrower": 8,
+      "borrow_date": "2025-12-07",
+      "return_date": null,
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": null,
+      "due_date": null
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 35,
+    "fields": {
+      "book": 5,
+      "borrower": 8,
+      "borrow_date": "2025-12-10",
+      "return_date": "2025-12-10",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-10",
+      "due_date": null
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 49,
+    "fields": {
+      "book": 5,
+      "borrower": 19,
+      "borrow_date": "2025-12-11",
+      "return_date": null,
+      "is_returned": false,
+      "notes": "",
+      "return_request": false,
+      "return_request_date": null,
+      "due_date": "2025-12-21"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 55,
+    "fields": {
+      "book": 5,
+      "borrower": 8,
+      "borrow_date": "2025-12-15",
+      "return_date": "2025-12-23",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-23",
+      "due_date": "2025-12-25"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 56,
+    "fields": {
+      "book": 14,
+      "borrower": 8,
+      "borrow_date": "2025-12-22",
+      "return_date": "2025-12-23",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-23",
+      "due_date": "2026-01-01"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 61,
+    "fields": {
+      "book": 19,
+      "borrower": 8,
+      "borrow_date": "2025-12-24",
+      "return_date": "2025-12-25",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-25",
+      "due_date": "2026-01-02"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 64,
+    "fields": {
+      "book": 14,
+      "borrower": 8,
+      "borrow_date": "2025-12-25",
+      "return_date": "2025-12-25",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-25",
+      "due_date": "2026-01-03"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 65,
+    "fields": {
+      "book": 18,
+      "borrower": 8,
+      "borrow_date": "2025-12-25",
+      "return_date": "2025-12-25",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-25",
+      "due_date": "2026-01-04"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 66,
+    "fields": {
+      "book": 21,
+      "borrower": 8,
+      "borrow_date": "2025-12-25",
+      "return_date": "2025-12-25",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-25",
+      "due_date": "2026-01-04"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 67,
+    "fields": {
+      "book": 19,
+      "borrower": 29,
+      "borrow_date": "2025-12-26",
+      "return_date": "2025-12-26",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-26",
+      "due_date": "2026-01-04"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 68,
+    "fields": {
+      "book": 22,
+      "borrower": 30,
+      "borrow_date": "2025-12-26",
+      "return_date": "2025-12-26",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-26",
+      "due_date": "2026-01-05"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 69,
+    "fields": {
+      "book": 22,
+      "borrower": 29,
+      "borrow_date": "2025-12-26",
+      "return_date": null,
+      "is_returned": false,
+      "notes": "",
+      "return_request": false,
+      "return_request_date": null,
+      "due_date": "2026-01-05"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 70,
+    "fields": {
+      "book": 28,
+      "borrower": 29,
+      "borrow_date": "2025-12-26",
+      "return_date": null,
+      "is_returned": false,
+      "notes": "",
+      "return_request": false,
+      "return_request_date": null,
+      "due_date": "2026-01-05"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 71,
+    "fields": {
+      "book": 23,
+      "borrower": 8,
+      "borrow_date": "2025-12-26",
+      "return_date": "2025-12-27",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-27",
+      "due_date": "2026-01-05"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 72,
+    "fields": {
+      "book": 22,
+      "borrower": 8,
+      "borrow_date": "2025-12-27",
+      "return_date": "2025-12-27",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-27",
+      "due_date": "2026-01-06"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 73,
+    "fields": {
+      "book": 24,
+      "borrower": 8,
+      "borrow_date": "2025-12-27",
+      "return_date": "2025-12-27",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-27",
+      "due_date": "2026-01-06"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 74,
+    "fields": {
+      "book": 23,
+      "borrower": 8,
+      "borrow_date": "2025-12-27",
+      "return_date": "2025-12-28",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-28",
+      "due_date": "2026-01-06"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 75,
+    "fields": {
+      "book": 22,
+      "borrower": 8,
+      "borrow_date": "2025-12-27",
+      "return_date": "2025-12-28",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-28",
+      "due_date": "2026-01-06"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 76,
+    "fields": {
+      "book": 24,
+      "borrower": 8,
+      "borrow_date": "2025-12-27",
+      "return_date": "2025-12-28",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-28",
+      "due_date": "2026-01-06"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 77,
+    "fields": {
+      "book": 26,
+      "borrower": 8,
+      "borrow_date": "2025-12-27",
+      "return_date": "2025-12-28",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-28",
+      "due_date": "2026-01-06"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 78,
+    "fields": {
+      "book": 23,
+      "borrower": 8,
+      "borrow_date": "2025-12-28",
+      "return_date": "2025-12-28",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-28",
+      "due_date": "2026-01-07"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 79,
+    "fields": {
+      "book": 24,
+      "borrower": 8,
+      "borrow_date": "2025-12-28",
+      "return_date": "2025-12-28",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-28",
+      "due_date": "2026-01-07"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 80,
+    "fields": {
+      "book": 21,
+      "borrower": 8,
+      "borrow_date": "2025-12-28",
+      "return_date": "2025-12-28",
+      "is_returned": true,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2025-12-28",
+      "due_date": "2026-01-07"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 81,
+    "fields": {
+      "book": 23,
+      "borrower": 37,
+      "borrow_date": "2025-12-28",
+      "return_date": null,
+      "is_returned": false,
+      "notes": "",
+      "return_request": false,
+      "return_request_date": null,
+      "due_date": "2026-01-07"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 82,
+    "fields": {
+      "book": 18,
+      "borrower": 8,
+      "borrow_date": "2025-12-28",
+      "return_date": null,
+      "is_returned": false,
+      "notes": "",
+      "return_request": true,
+      "return_request_date": "2026-01-02",
+      "due_date": "2026-01-07"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 83,
+    "fields": {
+      "book": 21,
+      "borrower": 38,
+      "borrow_date": "2026-01-02",
+      "return_date": null,
+      "is_returned": false,
+      "notes": "",
+      "return_request": false,
+      "return_request_date": null,
+      "due_date": "2026-01-12"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 84,
+    "fields": {
+      "book": 28,
+      "borrower": 38,
+      "borrow_date": "2026-01-02",
+      "return_date": null,
+      "is_returned": false,
+      "notes": "",
+      "return_request": false,
+      "return_request_date": null,
+      "due_date": "2026-01-12"
+    }
+  },
+  {
+    "model": "books.borrowedbook",
+    "pk": 85,
+    "fields": {
+      "book": 23,
+      "borrower": 38,
+      "borrow_date": "2026-01-02",
+      "return_date": null,
+      "is_returned": false,
+      "notes": "",
+      "return_request": false,
+      "return_request_date": null,
+      "due_date": "2026-01-12"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 44,
+    "fields": {
+      "user": 30,
+      "book": 22,
+      "created_at": "2025-12-26T14:49:47.690981+00:00"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 46,
+    "fields": {
+      "user": 29,
+      "book": 22,
+      "created_at": "2025-12-26T16:14:10.173116+00:00"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 47,
+    "fields": {
+      "user": 29,
+      "book": 28,
+      "created_at": "2025-12-26T16:14:41.704274+00:00"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 53,
+    "fields": {
+      "user": 30,
+      "book": 18,
+      "created_at": "2025-12-26T17:14:54.920754+00:00"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 60,
+    "fields": {
+      "user": 8,
+      "book": 26,
+      "created_at": "2025-12-27T07:45:30.864761+00:00"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 61,
+    "fields": {
+      "user": 8,
+      "book": 24,
+      "created_at": "2025-12-27T08:03:13.583827+00:00"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 63,
+    "fields": {
+      "user": 8,
+      "book": 20,
+      "created_at": "2025-12-27T08:10:49.275200+00:00"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 64,
+    "fields": {
+      "user": 8,
+      "book": 22,
+      "created_at": "2025-12-27T10:20:03.350709+00:00"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 68,
+    "fields": {
+      "user": 37,
+      "book": 23,
+      "created_at": "2025-12-28T07:07:10.190061+00:00"
+    }
+  },
+  {
+    "model": "books.favorite_book",
+    "pk": 69,
+    "fields": {
+      "user": 8,
+      "book": 23,
+      "created_at": "2025-12-28T08:08:10.192283+00:00"
+    }
+  }
+]

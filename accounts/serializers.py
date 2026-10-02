@@ -1,13 +1,14 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User 
 from books.serializers import BookSerializers 
 from django.contrib.auth import authenticate, get_user_model
-from rest_framework.authtoken.models import Token
 from rest_framework.validators import UniqueValidator 
 from django.contrib.auth.password_validation import validate_password 
 from books.models import Favorite_Book  
 from .models import * 
 from dashboard.models import * 
+from drf_spectacular.utils import extend_schema_field
+from Bookshelf.api_responses import InvalidCredentials, get_user_role_meta
+from Bookshelf.openapi import RequesterRoleSchemaSerializer
 
 User = get_user_model()
 
@@ -27,14 +28,36 @@ class LoginSerializer(serializers.Serializer):
             user = User.objects.filter(username__iexact=identifier).first()
 
         if not user:
-            raise serializers.ValidationError({"error": "اسم المستخدم/الإيميل غير موجود"})
+            raise InvalidCredentials()
 
         auth_user = authenticate(username=user.username, password=password)
         if not auth_user:
-            raise serializers.ValidationError({"error": "اسم المستخدم أو كلمة المرور غير صحيحة"})
+            raise InvalidCredentials()
 
         attrs["user"] = auth_user
         return attrs
+
+
+class CurrentUserSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
+
+    @extend_schema_field(RequesterRoleSchemaSerializer)
+    def get_role(self, obj):
+        return get_user_role_meta(obj)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "role",
+            "governorate",
+            "library",
+        ]
+        read_only_fields = fields
 
 class RegisterSerializer( serializers.ModelSerializer ) : 
     
@@ -80,18 +103,23 @@ class RegisterSerializer( serializers.ModelSerializer ) :
         return user 
 
 
-class ResetPasswordSerilaizer( serializers.Serializer ) :
-    old_password = serializers.CharField( required = True )
-    new_password = serializers.CharField( write_only = True , required = True  , validators = [ validate_password ] )
-    confirm_password = serializers.CharField(  write_only = True , required = True ) 
+class ResetPasswordSerilaizer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True, required=True)
+    new_password = serializers.CharField(write_only=True, required=True)
+    new_password_confirm = serializers.CharField(write_only=True, required=True)
     
     def validate( self , attrs ) : 
         user = self.context['request'].user 
-        if not user.check_password( attrs['old_password'] ) : 
-            raise serializers.ValidationError( { "error" : "كلمة المرور القديمة خاطئة"} )   
-        if attrs['new_password'] != attrs['confirm_password'] : 
-            raise serializers.ValidationError({"error" : "كلمة المرور غير متطابقة"}) 
-        return attrs 
+        if not user.check_password(attrs["current_password"]):
+            raise serializers.ValidationError(
+                {"current_password": "كلمة المرور الحالية غير صحيحة."}
+            )
+        if attrs["new_password"] != attrs["new_password_confirm"]:
+            raise serializers.ValidationError(
+                {"new_password_confirm": "كلمتا المرور الجديدتان غير متطابقتين."}
+            )
+        validate_password(attrs["new_password"], user=user)
+        return attrs
     
     def save( self , **kwargs ) :
         user = self.context['request'].user 
@@ -99,9 +127,28 @@ class ResetPasswordSerilaizer( serializers.Serializer ) :
         user.save()
         return user 
 
-class UserProfileSerializer(serializers.ModelSerializer):
+
+class AdminPasswordResetSerializer(serializers.Serializer):
+    new_password = serializers.CharField(write_only=True, required=True)
+    new_password_confirm = serializers.CharField(write_only=True, required=True)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password_confirm"]:
+            raise serializers.ValidationError(
+                {"new_password_confirm": "كلمتا المرور الجديدتان غير متطابقتين."}
+            )
+        validate_password(attrs["new_password"], user=self.context["user"])
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.context["user"]
+        user.set_password(self.validated_data["new_password"])
+        user.save(update_fields=["password"])
+        return user
+
+class UserDetailsSerializer(serializers.ModelSerializer):
     class Meta:
-        model  = UserProfile
+        model = User
         fields = ['address', 'phone', 'gender', 'age', 'borrowing_blocked']
         read_only_fields = ['borrowing_blocked']
 
@@ -134,10 +181,10 @@ class ProfileSerializer( serializers.ModelSerializer ) :
     overdue_books_count = serializers.IntegerField( read_only = True )
     favorites_count = serializers.IntegerField( read_only = True )
     tier = serializers.CharField(read_only=True)
-    profile = UserProfileSerializer()
+    profile = UserDetailsSerializer(source="*", required=False)
     activities = UserActivitySerializer(many=True, read_only=True, source="registered_activities")
     available_books = serializers.IntegerField( read_only = True )
-    borrowing_blocked = serializers.BooleanField(source="profile.borrowing_blocked", read_only=True)
+    borrowing_blocked = serializers.BooleanField(read_only=True)
 
 
     class Meta : 
@@ -145,20 +192,34 @@ class ProfileSerializer( serializers.ModelSerializer ) :
         fields = [ "username" , "email" , "first_name" , "last_name" , 
         "borrowed_books_count" ,"overdue_books_count","favorites_count","available_books"
         ,"borrowing_blocked","date_joined" ,"profile","tier","activities"] 
-        read_only_fields = ['date_joined'] 
+        read_only_fields = [
+            "username",
+            "borrowed_books_count",
+            "overdue_books_count",
+            "favorites_count",
+            "available_books",
+            "borrowing_blocked",
+            "date_joined",
+            "tier",
+            "activities",
+        ]
        
     def update(self, instance, validated_data):
-        profile_data = validated_data.pop('profile', {})
+        profile_fields = {"address", "phone", "gender", "age"}
+        profile_data = {
+            field: validated_data.pop(field)
+            for field in profile_fields
+            if field in validated_data
+        }
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
         if profile_data:
-            profile = instance.profile
             for attr, value in profile_data.items():
-                setattr(profile, attr, value)
-            profile.save()
+                setattr(instance, attr, value)
+            instance.save(update_fields=profile_data.keys())
 
         return instance
     

@@ -1,0 +1,1646 @@
+openapi: 3.0.3
+info:
+  title: Library Management System API
+  version: 1.0.0
+  description: توثيق API لنظام إدارة المكتبة
+paths:
+  /accounts/change_password:
+    post:
+      operationId: profile_change_password
+      description: يتحقق من كلمة المرور الحالية، وتطابق كلمتي المرور الجديدتين، ومدققات
+        قوة كلمة المرور. أخطاء هذه الحالات تبقى VALIDATION_ERROR بأسماء الحقول.
+      summary: تغيير كلمة المرور
+      tags:
+      - Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordSerilaizer'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordSerilaizer'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordSerilaizer'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordChangedSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR مع تفاصيل الحقول.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /accounts/login:
+    post:
+      operationId: auth_login
+      description: يعيد access token في JSON، بينما يُرسل refresh token كـHttpOnly
+        Cookie باسم `refresh_token` ولا يظهر في جسم الاستجابة.
+      summary: تسجيل الدخول
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: INVALID_CREDENTIALS أو VALIDATION_ERROR.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /accounts/logout:
+    post:
+      operationId: auth_logout
+      description: يتطلب Bearer access token ويقرأ `refresh_token` من HttpOnly Cookie.
+        يبطل refresh token عبر blacklist؛ ولا يبطل access token الحالي فورًا. غياب
+        refresh cookie يبقى نجاحًا idempotent حسب السلوك الحالي.
+      summary: تسجيل الخروج
+      parameters:
+      - in: cookie
+        name: refresh_token
+        schema:
+          type: string
+        description: HttpOnly refresh cookie المنشأة عند تسجيل الدخول.
+      tags:
+      - Authentication
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccessEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو AUTHENTICATION_FAILED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /accounts/me:
+    get:
+      operationId: auth_me
+      description: Apply the shared success envelope to selected DRF views only.
+      summary: بيانات المستخدم الحالي
+      tags:
+      - Profile
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserSuccessEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /accounts/profile:
+    get:
+      operationId: profile_get
+      description: Apply the shared success envelope to selected DRF views only.
+      summary: جلب الملف الشخصي
+      tags:
+      - Profile
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileSuccessEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+    put:
+      operationId: profile_replace
+      description: الحقول القابلة للتعديل موضحة في request schema. لا يمكن تعديل role
+        أو governorate أو library أو is_active أو is_staff أو is_superuser أو password
+        أو borrowing_blocked.
+      summary: تحديث الملف الشخصي بالكامل
+      tags:
+      - Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateSchema'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateSchema'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateSchema'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileUpdateSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+    patch:
+      operationId: profile_update
+      description: 'يسمح فقط بـemail وfirst_name وlast_name وحقول profile: address
+        وphone وgender وage. حقول الدور والنطاق والحالة وكلمة المرور وحظر الاستعارة
+        غير قابلة للتعديل هنا.'
+      summary: تحديث جزئي للملف الشخصي
+      tags:
+      - Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateSchema'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateSchema'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateSchema'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilePatchSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /accounts/refresh:
+    post:
+      operationId: auth_refresh
+      description: لا يستقبل body. يقرأ refresh token حصريًا من HttpOnly Cookie باسم
+        `refresh_token`. قد لا تتمكن Swagger UI من إنشاء هذه الكوكي يدويًا؛ عادةً
+        تُحفظ تلقائيًا من استجابة login عند استخدام نفس الأصل.
+      summary: تجديد access token
+      parameters:
+      - in: cookie
+        name: refresh_token
+        schema:
+          type: string
+        description: HttpOnly refresh cookie المنشأة عند تسجيل الدخول.
+        required: true
+      tags:
+      - Authentication
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshSuccessEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN أو AUTHENTICATION_FAILED.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /dashboard/users/:
+    get:
+      operationId: users_list
+      description: 'النتائج scoped حسب السياسة الحالية: SUPERUSER لجميع المستخدمين
+        الذين يعيدهم queryset الحالي، MINISTRY_ADMIN لمستخدمي النظام، GOVERNORATE_ADMIN
+        ضمن محافظته، وLIBRARIAN لنفسه وReaders ضمن مكتبته. READER يخضع للصلاحيات الحالية.'
+      summary: قائمة المستخدمين ضمن نطاق مقدم الطلب
+      parameters:
+      - in: query
+        name: name
+        schema:
+          type: string
+        description: بحث جزئي في username أو الاسم الأول أو الأخير.
+      tags:
+      - User Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserListSuccessEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+    post:
+      operationId: users_create
+      description: 'الأدوار المسموحة: SUPERUSER ينشئ جميع Business roles؛ MINISTRY_ADMIN
+        ينشئ GOVERNORATE_ADMIN/LIBRARIAN/READER؛ GOVERNORATE_ADMIN ينشئ LIBRARIAN/READER
+        ضمن محافظته؛ LIBRARIAN ينشئ READER ضمن مكتبته؛ READER ممنوع. GOVERNORATE_ADMIN
+        يحتاج governorate، وLIBRARIAN يحتاج library، وREADER يحتاج library إلا عند
+        إنشائه بواسطة LIBRARIAN حيث تُعين server-side. is_staff وis_superuser ليسا
+        مدخلين مسموحين.'
+      summary: إنشاء مستخدم
+      tags:
+      - User Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAdminCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserAdminCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserAdminCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCreateSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR مع أخطاء role أو governorate أو library أو
+            password أو username.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /dashboard/users/{id}/:
+    get:
+      operationId: users_retrieve
+      description: الهدف خارج scoped queryset يعاد كـNOT_FOUND دون كشف وجوده.
+      summary: جلب مستخدم ضمن النطاق
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this custom user.
+        required: true
+      tags:
+      - User Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRetrieveSuccessEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND، ويشمل الهدف خارج النطاق.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /dashboard/users/{id}/block[_-]borrowing/:
+    post:
+      operationId: user_block_borrowing
+      description: المسار الفعلي يقبل `block_borrowing` و`block-borrowing` بسبب url_path
+        الحالي.
+      summary: حظر الاستعارة لمستخدم
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this custom user.
+        required: true
+      tags:
+      - User Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBorrowingBlockedSuccessEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND للهدف خارج النطاق.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /dashboard/users/{id}/deactivate/:
+    post:
+      operationId: user_deactivate
+      description: لا يحذف الحساب. يخضع للصلاحيات والنطاق الحاليين.
+      summary: تعطيل حساب مستخدم
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this custom user.
+        required: true
+      tags:
+      - User Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDeactivateSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR للحالات business-invalid.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND للهدف خارج النطاق.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /dashboard/users/{id}/reactivate/:
+    post:
+      operationId: user_reactivate
+      description: لا ينشئ حسابًا جديدًا، ويتحقق من بقاء النطاق التنظيمي فعالًا.
+      summary: إعادة تفعيل حساب مستخدم
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this custom user.
+        required: true
+      tags:
+      - User Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserReactivateSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR، بما فيه النطاق التنظيمي غير الفعال.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND للهدف خارج النطاق.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /dashboard/users/{id}/reset-password/:
+    post:
+      operationId: user_reset_password
+      description: الصلاحية تعتمد على الدور والنطاق، ولا يسمح بإعادة تعيين كلمة مرور
+        الذات حسب السياسة الحالية.
+      summary: إعادة تعيين كلمة مرور مستخدم
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this custom user.
+        required: true
+      tags:
+      - User Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPasswordReset'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminPasswordReset'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminPasswordReset'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPasswordResetSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR لتطابق أو قوة كلمة المرور.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND للهدف خارج النطاق.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /dashboard/users/{id}/unblock[_-]borrowing/:
+    post:
+      operationId: user_unblock_borrowing
+      description: المسار الفعلي يقبل `unblock_borrowing` و`unblock-borrowing` بسبب
+        url_path الحالي.
+      summary: إلغاء حظر الاستعارة لمستخدم
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this custom user.
+        required: true
+      tags:
+      - User Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBorrowingUnblockedSuccessEnvelope'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND للهدف خارج النطاق.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+components:
+  schemas:
+    AccessTokenDataSchema:
+      type: object
+      properties:
+        access:
+          type: string
+      required:
+      - access
+    AdminPasswordReset:
+      type: object
+      properties:
+        new_password:
+          type: string
+          writeOnly: true
+        new_password_confirm:
+          type: string
+          writeOnly: true
+      required:
+      - new_password
+      - new_password_confirm
+    BlankEnum:
+      enum:
+      - ''
+    BorrowingBlockedDataSchema:
+      type: object
+      properties:
+        user_id:
+          type: integer
+        borrowing_blocked:
+          type: boolean
+        available_books:
+          type: integer
+      required:
+      - available_books
+      - borrowing_blocked
+      - user_id
+    BorrowingUnblockedDataSchema:
+      type: object
+      properties:
+        user_id:
+          type: integer
+        borrowing_blocked:
+          type: boolean
+        tier:
+          type: string
+        max_allowed:
+          type: integer
+        active_borrows:
+          type: integer
+        available_books:
+          type: integer
+      required:
+      - active_borrows
+      - available_books
+      - borrowing_blocked
+      - max_allowed
+      - tier
+      - user_id
+    Code205Enum:
+      enum:
+      - PROFILE_UPDATED
+      type: string
+      description: '* `PROFILE_UPDATED` - PROFILE_UPDATED'
+    CurrentUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RequesterRoleSchema'
+          readOnly: true
+        governorate:
+          type: integer
+          readOnly: true
+          nullable: true
+        library:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - email
+      - first_name
+      - governorate
+      - id
+      - last_name
+      - library
+      - role
+      - username
+    CurrentUserSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/CurrentUser'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/CurrentUserSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    CurrentUserSuccessEnvelopeCodeEnum:
+      enum:
+      - CURRENT_USER_RETRIEVED
+      type: string
+      description: '* `CURRENT_USER_RETRIEVED` - CURRENT_USER_RETRIEVED'
+    ErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        code:
+          $ref: '#/components/schemas/ErrorEnvelopeCodeEnum'
+        message:
+          type: string
+        data:
+          nullable: true
+        errors:
+          nullable: true
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - errors
+      - message
+      - meta
+    ErrorEnvelopeCodeEnum:
+      enum:
+      - INVALID_CREDENTIALS
+      - VALIDATION_ERROR
+      - AUTHENTICATION_REQUIRED
+      - AUTHENTICATION_FAILED
+      - INVALID_TOKEN
+      - PERMISSION_DENIED
+      - NOT_FOUND
+      - METHOD_NOT_ALLOWED
+      - THROTTLED
+      type: string
+      description: |-
+        * `INVALID_CREDENTIALS` - INVALID_CREDENTIALS
+        * `VALIDATION_ERROR` - VALIDATION_ERROR
+        * `AUTHENTICATION_REQUIRED` - AUTHENTICATION_REQUIRED
+        * `AUTHENTICATION_FAILED` - AUTHENTICATION_FAILED
+        * `INVALID_TOKEN` - INVALID_TOKEN
+        * `PERMISSION_DENIED` - PERMISSION_DENIED
+        * `NOT_FOUND` - NOT_FOUND
+        * `METHOD_NOT_ALLOWED` - METHOD_NOT_ALLOWED
+        * `THROTTLED` - THROTTLED
+    GenderEnum:
+      enum:
+      - male
+      - female
+      type: string
+      description: |-
+        * `male` - ذكر
+        * `female` - أنثى
+    Login:
+      type: object
+      properties:
+        identifier:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - identifier
+      - password
+    LoginDataSchema:
+      type: object
+      properties:
+        access:
+          type: string
+        user:
+          $ref: '#/components/schemas/LoginUserSchema'
+      required:
+      - access
+      - user
+    LoginSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginDataSchema'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/LoginSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    LoginSuccessEnvelopeCodeEnum:
+      enum:
+      - LOGIN_SUCCESS
+      type: string
+      description: '* `LOGIN_SUCCESS` - LOGIN_SUCCESS'
+    LoginUserSchema:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        role:
+          $ref: '#/components/schemas/RequesterRoleSchema'
+      required:
+      - id
+      - role
+      - username
+    LogoutSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          nullable: true
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/LogoutSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    LogoutSuccessEnvelopeCodeEnum:
+      enum:
+      - LOGOUT_SUCCESS
+      type: string
+      description: '* `LOGOUT_SUCCESS` - LOGOUT_SUCCESS'
+    NullEnum:
+      enum:
+      - null
+    PasswordChangedSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          nullable: true
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/PasswordChangedSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    PasswordChangedSuccessEnvelopeCodeEnum:
+      enum:
+      - PASSWORD_CHANGED
+      type: string
+      description: '* `PASSWORD_CHANGED` - PASSWORD_CHANGED'
+    PatchedProfileUpdateSchema:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        profile:
+          $ref: '#/components/schemas/ProfileWritableFields'
+    Profile:
+      type: object
+      properties:
+        username:
+          type: string
+          readOnly: true
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+        email:
+          title: Email address
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        borrowed_books_count:
+          type: integer
+          readOnly: true
+        overdue_books_count:
+          type: integer
+          readOnly: true
+        favorites_count:
+          type: integer
+          readOnly: true
+        available_books:
+          type: integer
+          readOnly: true
+        borrowing_blocked:
+          type: boolean
+          readOnly: true
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+        profile:
+          $ref: '#/components/schemas/UserDetails'
+        tier:
+          type: string
+          readOnly: true
+        activities:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserActivity'
+          readOnly: true
+      required:
+      - activities
+      - available_books
+      - borrowed_books_count
+      - borrowing_blocked
+      - date_joined
+      - favorites_count
+      - overdue_books_count
+      - tier
+      - username
+    ProfilePatchSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Profile'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/Code205Enum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    ProfileSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Profile'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/ProfileSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    ProfileSuccessEnvelopeCodeEnum:
+      enum:
+      - PROFILE_RETRIEVED
+      type: string
+      description: '* `PROFILE_RETRIEVED` - PROFILE_RETRIEVED'
+    ProfileUpdateSchema:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        profile:
+          $ref: '#/components/schemas/ProfileWritableFields'
+    ProfileUpdateSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Profile'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/Code205Enum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    ProfileWritableFields:
+      type: object
+      properties:
+        address:
+          type: string
+        phone:
+          type: string
+        gender:
+          type: string
+        age:
+          type: integer
+          nullable: true
+    RequesterRoleSchema:
+      type: object
+      properties:
+        code:
+          type: string
+        label:
+          type: string
+      required:
+      - code
+      - label
+    ResetPasswordSerilaizer:
+      type: object
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+        new_password:
+          type: string
+          writeOnly: true
+        new_password_confirm:
+          type: string
+          writeOnly: true
+      required:
+      - current_password
+      - new_password
+      - new_password_confirm
+    ResponseMetaSchema:
+      type: object
+      properties:
+        requester_role:
+          allOf:
+          - $ref: '#/components/schemas/RequesterRoleSchema'
+          nullable: true
+        retry_after:
+          type: integer
+      required:
+      - requester_role
+    RoleEnum:
+      enum:
+      - MINISTRY_ADMIN
+      - GOVERNORATE_ADMIN
+      - LIBRARIAN
+      - READER
+      type: string
+      description: |-
+        * `MINISTRY_ADMIN` - Ministry admin
+        * `GOVERNORATE_ADMIN` - Governorate admin
+        * `LIBRARIAN` - Librarian
+        * `READER` - Reader
+    TokenRefreshSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AccessTokenDataSchema'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/TokenRefreshSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    TokenRefreshSuccessEnvelopeCodeEnum:
+      enum:
+      - TOKEN_REFRESHED
+      type: string
+      description: '* `TOKEN_REFRESHED` - TOKEN_REFRESHED'
+    UserActivity:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        activity_id:
+          type: integer
+          readOnly: true
+        activity_name:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        image:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        is_visible:
+          type: boolean
+          readOnly: true
+        registered_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - activity_id
+      - activity_name
+      - description
+      - id
+      - image
+      - is_active
+      - is_visible
+      - registered_at
+      - title
+    UserAdminCreate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        email:
+          title: Email address
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        governorate:
+          type: integer
+          nullable: true
+        library:
+          type: integer
+          nullable: true
+        is_active:
+          type: boolean
+          readOnly: true
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - date_joined
+      - id
+      - is_active
+      - password
+      - role
+      - username
+    UserAdminSeri:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          title: Email address
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        borrowed_books_count:
+          type: integer
+          readOnly: true
+        borrowing_blocked:
+          type: boolean
+          readOnly: true
+        profile:
+          allOf:
+          - $ref: '#/components/schemas/UserDetails'
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RequesterRoleSchema'
+          readOnly: true
+        date_joined:
+          type: string
+          format: date-time
+      required:
+      - borrowed_books_count
+      - borrowing_blocked
+      - id
+      - profile
+      - role
+      - username
+    UserBorrowingBlockedSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/BorrowingBlockedDataSchema'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/UserBorrowingBlockedSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    UserBorrowingBlockedSuccessEnvelopeCodeEnum:
+      enum:
+      - USER_BORROWING_BLOCKED
+      type: string
+      description: '* `USER_BORROWING_BLOCKED` - USER_BORROWING_BLOCKED'
+    UserBorrowingUnblockedSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/BorrowingUnblockedDataSchema'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/UserBorrowingUnblockedSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    UserBorrowingUnblockedSuccessEnvelopeCodeEnum:
+      enum:
+      - USER_BORROWING_UNBLOCKED
+      type: string
+      description: '* `USER_BORROWING_UNBLOCKED` - USER_BORROWING_UNBLOCKED'
+    UserCreateSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/UserAdminCreate'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/UserCreateSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    UserCreateSuccessEnvelopeCodeEnum:
+      enum:
+      - USER_CREATED
+      type: string
+      description: '* `USER_CREATED` - USER_CREATED'
+    UserDeactivateSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          nullable: true
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/UserDeactivateSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    UserDeactivateSuccessEnvelopeCodeEnum:
+      enum:
+      - USER_DEACTIVATED
+      - USER_ALREADY_INACTIVE
+      type: string
+      description: |-
+        * `USER_DEACTIVATED` - USER_DEACTIVATED
+        * `USER_ALREADY_INACTIVE` - USER_ALREADY_INACTIVE
+    UserDetails:
+      type: object
+      properties:
+        address:
+          type: string
+          nullable: true
+          maxLength: 255
+        phone:
+          type: string
+          nullable: true
+          maxLength: 30
+        gender:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        age:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        borrowing_blocked:
+          type: boolean
+          readOnly: true
+      required:
+      - borrowing_blocked
+    UserListSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserAdminSeri'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/UserListSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    UserListSuccessEnvelopeCodeEnum:
+      enum:
+      - USERS_RETRIEVED
+      type: string
+      description: '* `USERS_RETRIEVED` - USERS_RETRIEVED'
+    UserPasswordResetSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          nullable: true
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/UserPasswordResetSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    UserPasswordResetSuccessEnvelopeCodeEnum:
+      enum:
+      - USER_PASSWORD_RESET
+      type: string
+      description: '* `USER_PASSWORD_RESET` - USER_PASSWORD_RESET'
+    UserReactivateSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          nullable: true
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/UserReactivateSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    UserReactivateSuccessEnvelopeCodeEnum:
+      enum:
+      - USER_REACTIVATED
+      - USER_ALREADY_ACTIVE
+      type: string
+      description: |-
+        * `USER_REACTIVATED` - USER_REACTIVATED
+        * `USER_ALREADY_ACTIVE` - USER_ALREADY_ACTIVE
+    UserRetrieveSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/UserAdminSeri'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/UserRetrieveSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    UserRetrieveSuccessEnvelopeCodeEnum:
+      enum:
+      - USER_RETRIEVED
+      type: string
+      description: '* `USER_RETRIEVED` - USER_RETRIEVED'
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

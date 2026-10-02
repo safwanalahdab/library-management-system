@@ -1,151 +1,346 @@
-from django.contrib.auth import login
-from django.contrib.auth.models import User
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
-from rest_framework import generics, status, viewsets
-from rest_framework.authentication import TokenAuthentication
-from rest_framework.authtoken.models import Token
-from rest_framework.authtoken.views import obtain_auth_token, ObtainAuthToken
+from rest_framework import generics, serializers, status, viewsets
 from rest_framework.decorators import (
     action,
-    api_view,
-    authentication_classes,
     permission_classes,
 )
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+)
 
+from Bookshelf.api_responses import (
+    ArabicApiResponseMixin,
+    RefreshTokenMissing,
+    get_user_role_meta,
+)
+from Bookshelf.openapi import (
+    AccessTokenDataSchemaSerializer,
+    LoginDataSchemaSerializer,
+    ProfileUpdateSchemaSerializer,
+    error_response,
+    success_envelope,
+)
 from books.models import BorrowedBook
 from books.serializers import BarrowBookSerilaizers
 from .serializers import *
-from books.views import get_user_tier 
+from books.views import get_user_tier
 
-class RegisterView ( generics.CreateAPIView ) : 
-    queryset = User.objects.all() 
-    permission_classes = [ AllowAny ] 
-    serializer_class = RegisterSerializer 
+User = get_user_model()
 
-    def create( self , request , *args, **kwargs ) : 
-        serilizer = self.get_serializer( data = request.data )
-        serilizer.is_valid( raise_exception = True ) 
 
-        user = serilizer.save() 
+def _set_refresh_cookie(response, refresh_token):
+    response.set_cookie(
+        key=settings.JWT_REFRESH_COOKIE_NAME,
+        value=str(refresh_token),
+        max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+        httponly=True,
+        secure=settings.JWT_REFRESH_COOKIE_SECURE,
+        samesite=settings.JWT_REFRESH_COOKIE_SAMESITE,
+        path=settings.JWT_REFRESH_COOKIE_PATH,
+    )
 
-        token , created = Token.objects.get_or_create( user = user )
 
-        login( request , user ) 
+def _delete_refresh_cookie(response):
+    response.delete_cookie(
+        key=settings.JWT_REFRESH_COOKIE_NAME,
+        path=settings.JWT_REFRESH_COOKIE_PATH,
+        samesite=settings.JWT_REFRESH_COOKIE_SAMESITE,
+    )
+
+
+@extend_schema_view(post=extend_schema(exclude=True))
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    permission_classes = [AllowAny]
+    serializer_class = RegisterSerializer
+
+    def create(self, request, *args, **kwargs):
+        serilizer = self.get_serializer(data=request.data)
+        serilizer.is_valid(raise_exception=True)
+
+        user = serilizer.save()
 
         data = {
-            "message" : "تم انشاء المستخدم بنجاح " ,
-            "user" : {
-            "username" : user.username , 
-            "email" : user.email , 
-            "first_name" : user.first_name , 
-            "last_name" : user.last_name ,
-            }
-            ,
-            "token" : token.key 
+            "message": "تم انشاء المستخدم بنجاح ",
+            "user": {
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+            },
         }
 
-        return Response( data , status = status.HTTP_201_CREATED )
+        return Response(data, status=status.HTTP_201_CREATED)
 
-""" 
-### RegisterView
 
-Public API for user registration with automatic token creation and login.
-
-- **Register a new user**
-  - `POST /api/register/`
-  - Public endpoint (`AllowAny`).
-  - Uses `RegisterSerializer` to validate and create the user.
-  - On success:
-    - Creates or retrieves an auth `Token` for the new user.
-    - Logs the user in using Django's `login(request, user)`.
-    - Returns:
-      - Success message (Arabic).
-      - Basic user info: `username`, `email`, `first_name`, `last_name`.
-      - Authentication `token` to be used for subsequent authenticated requests. 
-
-class LoginView ( ObtainAuthToken ) :
-    permission_classes = [ AllowAny ] 
-    authentication_classes = [ TokenAuthentication ] 
-
-    def post( self, request, *args, **kwargs ) : 
-         response =  super().post(request, *args, **kwargs) 
-         if 'token' in response.data : 
-          token = Token.objects.get( key = response.data['token'] )  
-          data = {
-            "message" : "تم تسجيل الدخول بنجاح " , 
-            "status" : {
-                "token" : token.key , 
-                "user_id" : token.user.id ,
-                "user_name" : token.user.username , 
-            }
-          }  
-          return Response( data ) 
-         
-         return Response(
-                {"error": "اسم المستخدم أو كلمة المرور غير صحيحة"},
-                status= status.HTTP_400_BAD_REQUEST 
-            )
-"""
-
-class LoginView(APIView):
+@extend_schema_view(
+    post=extend_schema(
+        tags=["Authentication"],
+        operation_id="auth_login",
+        summary="تسجيل الدخول",
+        description=(
+            "يعيد access token في JSON، بينما يُرسل refresh token كـHttpOnly Cookie "
+            "باسم `refresh_token` ولا يظهر في جسم الاستجابة."
+        ),
+        auth=[],
+        request=LoginSerializer,
+        responses={
+            200: success_envelope(
+                "LoginSuccessEnvelope", LoginDataSchemaSerializer(), ["LOGIN_SUCCESS"]
+            ),
+            400: error_response("INVALID_CREDENTIALS أو VALIDATION_ERROR."),
+            429: error_response("THROTTLED."),
+        },
+    )
+)
+class LoginView(ArabicApiResponseMixin, APIView):
     permission_classes = [AllowAny]
-
+    success_response_messages = {
+        "post": ("LOGIN_SUCCESS", "تم تسجيل الدخول بنجاح."),
+    }
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data["user"]
-        token, _ = Token.objects.get_or_create(user=user)
+        refresh = RefreshToken.for_user(user)
 
         data = {
-            "message": "تم تسجيل الدخول بنجاح",
-            "status": {
-                "token": token.key,
-                "user_id": user.id,
-                "user_name": user.username,
+            "access": str(refresh.access_token),
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "role": get_user_role_meta(user),
             },
         }
-        return Response(data, status=status.HTTP_200_OK)
+        response = Response(data, status=status.HTTP_200_OK)
+        response._requester_user = user
+        _set_refresh_cookie(response, refresh)
+        return response
 
 
-class LogoutView( APIView ) : 
+@extend_schema_view(
+    post=extend_schema(
+        tags=["Authentication"],
+        operation_id="auth_refresh",
+        summary="تجديد access token",
+        description=(
+            "لا يستقبل body. يقرأ refresh token حصريًا من HttpOnly Cookie باسم "
+            "`refresh_token`. قد لا تتمكن Swagger UI من إنشاء هذه الكوكي يدويًا؛ "
+            "عادةً تُحفظ تلقائيًا من استجابة login عند استخدام نفس الأصل."
+        ),
+        auth=[],
+        request=None,
+        parameters=[
+            OpenApiParameter(
+                name="refresh_token",
+                type=str,
+                location=OpenApiParameter.COOKIE,
+                required=True,
+                description="HttpOnly refresh cookie المنشأة عند تسجيل الدخول.",
+            )
+        ],
+        responses={
+            200: success_envelope(
+                "TokenRefreshSuccessEnvelope",
+                AccessTokenDataSchemaSerializer(),
+                ["TOKEN_REFRESHED"],
+            ),
+            401: error_response(
+                "AUTHENTICATION_REQUIRED أو INVALID_TOKEN أو AUTHENTICATION_FAILED."
+            ),
+            429: error_response("THROTTLED."),
+        },
+    )
+)
+class RefreshView(ArabicApiResponseMixin, APIView):
+    permission_classes = [AllowAny]
+    success_response_messages = {
+        "post": ("TOKEN_REFRESHED", "تم تجديد رمز الدخول بنجاح."),
+    }
 
-    def post( self , request ) : 
-        request.user.auth_token.delete() 
-        return Response({"message" : "تم تسجيل الخروج بنجاح "} , status = status.HTTP_200_OK  )
-     
-"""
-### LogoutView
+    def post(self, request):
+        refresh_token = request.COOKIES.get(settings.JWT_REFRESH_COOKIE_NAME)
+        if not refresh_token:
+            raise RefreshTokenMissing()
 
-Authenticated API for logging out a user by deleting their auth token.
+        try:
+            token = RefreshToken(refresh_token)
+            user_id = token[settings.SIMPLE_JWT.get("USER_ID_CLAIM", "user_id")]
+        except (TokenError, KeyError):
+            raise InvalidToken("Invalid refresh token.")
 
-- **Logout**
-  - `POST /api/logout/`
-  - Auth required (user must be logged in with a valid token).
-  - Behavior:
-    - Deletes the current user's `auth_token` (`request.user.auth_token.delete()`).
-    - Effectively invalidates the token so it can no longer be used.
-  - Response:
-    - `{"message": "تم تسجيل الخروج بنجاح "}`
-    - HTTP status `200 OK`.
+        user = get_user_model().objects.filter(pk=user_id).first()
+        if user is None or not user.is_active:
+            raise AuthenticationFailed()
 
-"""
+        serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError:
+            raise InvalidToken("Invalid refresh token.")
 
-class ResetPasswordView( APIView ) :
-    
-    def post( self , request ) : 
-        serilizaer = ResetPasswordSerilaizer( data = request.data , context =  { "request" : request } )
-        serilizaer.is_valid( raise_exception = True ) 
-        serilizaer.save() 
-        return Response({"message" : "تم تغيير كلمة المرور بنجاح"} , status = status.HTTP_200_OK )  
+        response = Response(
+            {"access": serializer.validated_data["access"]},
+            status=status.HTTP_200_OK,
+        )
+        response._requester_user = user
+        rotated_refresh = serializer.validated_data.get("refresh")
+        if rotated_refresh:
+            _set_refresh_cookie(response, rotated_refresh)
+        return response
+
+
+@extend_schema_view(
+    post=extend_schema(
+        tags=["Authentication"],
+        operation_id="auth_logout",
+        summary="تسجيل الخروج",
+        description=(
+            "يتطلب Bearer access token ويقرأ `refresh_token` من HttpOnly Cookie. "
+            "يبطل refresh token عبر blacklist؛ ولا يبطل access token الحالي فورًا. "
+            "غياب refresh cookie يبقى نجاحًا idempotent حسب السلوك الحالي."
+        ),
+        request=None,
+        parameters=[
+            OpenApiParameter(
+                name="refresh_token",
+                type=str,
+                location=OpenApiParameter.COOKIE,
+                required=False,
+                description="HttpOnly refresh cookie المنشأة عند تسجيل الدخول.",
+            )
+        ],
+        responses={
+            200: success_envelope(
+                "LogoutSuccessEnvelope",
+                serializers.JSONField(allow_null=True),
+                ["LOGOUT_SUCCESS"],
+            ),
+            401: error_response("AUTHENTICATION_REQUIRED أو AUTHENTICATION_FAILED أو INVALID_TOKEN."),
+            429: error_response("THROTTLED."),
+        },
+    )
+)
+class LogoutView(ArabicApiResponseMixin, APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    success_response_messages = {
+        "post": ("LOGOUT_SUCCESS", "تم تسجيل الخروج بنجاح."),
+    }
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get(settings.JWT_REFRESH_COOKIE_NAME)
+        if not refresh_token:
+            response = Response(
+                None,
+                status=status.HTTP_200_OK,
+            )
+            _delete_refresh_cookie(response)
+            return response
+
+        try:
+            token = RefreshToken(refresh_token)
+            refresh_user_id = token[settings.SIMPLE_JWT.get("USER_ID_CLAIM", "user_id")]
+        except (TokenError, KeyError):
+            raise InvalidToken("Invalid refresh token.")
+
+        if str(refresh_user_id) != str(request.user.pk):
+            raise AuthenticationFailed(
+                "Refresh token does not belong to the authenticated user."
+            )
+
+        token.blacklist()
+
+        response = Response(
+            None,
+            status=status.HTTP_200_OK,
+        )
+        _delete_refresh_cookie(response)
+        return response
+
+
+@extend_schema_view(
+    get=extend_schema(
+        tags=["Profile"],
+        operation_id="auth_me",
+        summary="بيانات المستخدم الحالي",
+        responses={
+            200: success_envelope(
+                "CurrentUserSuccessEnvelope",
+                CurrentUserSerializer(),
+                ["CURRENT_USER_RETRIEVED"],
+            ),
+            401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+            429: error_response("THROTTLED."),
+        },
+    )
+)
+class MeView(ArabicApiResponseMixin, APIView):
+    permission_classes = [IsAuthenticated]
+    success_response_messages = {
+        "get": ("CURRENT_USER_RETRIEVED", "تم جلب بيانات المستخدم بنجاح."),
+    }
+
+    def get(self, request):
+        serializer = CurrentUserSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@extend_schema_view(
+    post=extend_schema(
+        tags=["Profile"],
+        operation_id="profile_change_password",
+        summary="تغيير كلمة المرور",
+        description=(
+            "يتحقق من كلمة المرور الحالية، وتطابق كلمتي المرور الجديدتين، "
+            "ومدققات قوة كلمة المرور. أخطاء هذه الحالات تبقى VALIDATION_ERROR بأسماء الحقول."
+        ),
+        request=ResetPasswordSerilaizer,
+        responses={
+            200: success_envelope(
+                "PasswordChangedSuccessEnvelope",
+                serializers.JSONField(allow_null=True),
+                ["PASSWORD_CHANGED"],
+            ),
+            400: error_response("VALIDATION_ERROR مع تفاصيل الحقول."),
+            401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+            429: error_response("THROTTLED."),
+        },
+    )
+)
+class ResetPasswordView(ArabicApiResponseMixin, APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    success_response_messages = {
+        "post": ("PASSWORD_CHANGED", "تم تغيير كلمة المرور بنجاح."),
+    }
+
+    def post(self, request):
+        serilizaer = ResetPasswordSerilaizer(
+            data=request.data, context={"request": request}
+        )
+        serilizaer.is_valid(raise_exception=True)
+        serilizaer.save()
+        return Response(None, status=status.HTTP_200_OK)
+
 
 """
 ### ResetPasswordView
@@ -166,21 +361,77 @@ Authenticated API for changing the current user's password.
     - HTTP status `200 OK`.
 """
 
-class ProfileView( generics.RetrieveUpdateAPIView ) :
+
+@extend_schema_view(
+    get=extend_schema(
+        tags=["Profile"],
+        operation_id="profile_get",
+        summary="جلب الملف الشخصي",
+        responses={
+            200: success_envelope(
+                "ProfileSuccessEnvelope", ProfileSerializer(), ["PROFILE_RETRIEVED"]
+            ),
+            401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+            429: error_response("THROTTLED."),
+        },
+    ),
+    put=extend_schema(
+        tags=["Profile"],
+        operation_id="profile_replace",
+        summary="تحديث الملف الشخصي بالكامل",
+        description=(
+            "الحقول القابلة للتعديل موضحة في request schema. لا يمكن تعديل role أو governorate "
+            "أو library أو is_active أو is_staff أو is_superuser أو password أو borrowing_blocked."
+        ),
+        request=ProfileUpdateSchemaSerializer,
+        responses={
+            200: success_envelope(
+                "ProfileUpdateSuccessEnvelope", ProfileSerializer(), ["PROFILE_UPDATED"]
+            ),
+            400: error_response("VALIDATION_ERROR."),
+            401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+            429: error_response("THROTTLED."),
+        },
+    ),
+    patch=extend_schema(
+        tags=["Profile"],
+        operation_id="profile_update",
+        summary="تحديث جزئي للملف الشخصي",
+        description=(
+            "يسمح فقط بـemail وfirst_name وlast_name وحقول profile: address وphone وgender وage. "
+            "حقول الدور والنطاق والحالة وكلمة المرور وحظر الاستعارة غير قابلة للتعديل هنا."
+        ),
+        request=ProfileUpdateSchemaSerializer,
+        responses={
+            200: success_envelope(
+                "ProfilePatchSuccessEnvelope", ProfileSerializer(), ["PROFILE_UPDATED"]
+            ),
+            400: error_response("VALIDATION_ERROR."),
+            401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+            429: error_response("THROTTLED."),
+        },
+    ),
+)
+class ProfileView(ArabicApiResponseMixin, generics.RetrieveUpdateAPIView):
     serializer_class = ProfileSerializer
+    permission_classes = [IsAuthenticated]
+    success_response_messages = {
+        "get": ("PROFILE_RETRIEVED", "تم جلب الملف الشخصي بنجاح."),
+        "put": ("PROFILE_UPDATED", "تم تحديث معلومات الحساب بنجاح."),
+        "patch": ("PROFILE_UPDATED", "تم تحديث معلومات الحساب بنجاح."),
+    }
 
     def _get_user_activities(self, user):
-     return (
-        ActivityRegistration.objects.select_related("activity")
-        .filter(user=user, activity__is_visible=True)
-        .order_by("-created_at")
-    )
+        return (
+            ActivityRegistration.objects.select_related("activity")
+            .filter(user=user, activity__is_visible=True)
+            .order_by("-created_at")
+        )
 
-    def get_object( self ) :
+    def get_object(self):
 
         today = timezone.now().date()
-        user = (
-         User.objects.annotate(
+        user = User.objects.annotate(
             borrowed_books_count=Count(
                 "borrower_book",
                 filter=Q(borrower_book__is_returned=False),
@@ -199,13 +450,12 @@ class ProfileView( generics.RetrieveUpdateAPIView ) :
                 filter=Q(user_fav__book__is_archived=False),
                 distinct=True,
             ),
-        )
-        .get(id=self.request.user.id)
-    )
-        user.tier,mx = get_user_tier(user)
+        ).get(id=self.request.user.id)
+        user.tier, mx = get_user_tier(user)
         user.registered_activities = self._get_user_activities(user)
         user.available_books = mx if mx < 0 else max(mx - user.borrowed_books_count, 0)
         return user
+
 
 """
 ### ProfileView
@@ -241,43 +491,65 @@ Authenticated API for retrieving and updating the current user's profile with ex
       - `favorites_count`
 """
 
-class BorrwoedProfileView( viewsets.ModelViewSet ) :
-    queryset = BorrowedBook.objects.all() 
-    serializer_class = BarrowBookSerilaizers 
-    
-    def get_queryset( self ) :
-        user = self.request.user 
-        querset = BorrowedBook.objects.filter( borrower = user , is_returned = False )
-        return querset 
-    
-    @action( detail = True , methods = ['post'] ) 
-    def return_book( self , request , pk = None ) : 
-        book = self.get_object() 
-        if book.return_request == True : 
-            return Response({"Message" : "لقد قمت بتقديم طلب استعادة بالفعل سابقا"},status = status.HTTP_400_BAD_REQUEST)
+
+class BorrwoedProfileView(viewsets.ModelViewSet):
+    queryset = BorrowedBook.objects.all()
+    serializer_class = BarrowBookSerilaizers
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        querset = BorrowedBook.objects.filter(borrower=user, is_returned=False)
+        return querset
+
+    @action(detail=True, methods=["post"])
+    def return_book(self, request, pk=None):
+        book = self.get_object()
+        if book.return_request == True:
+            return Response(
+                {"Message": "لقد قمت بتقديم طلب استعادة بالفعل سابقا"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         book.return_request = True
-        book.return_request_date = timezone.now() 
-        book.save() 
-        return Response({"Message" : "لقد قمت بتقديم طلب استعادة بنجاح"} , status = status.HTTP_200_OK ) 
-    
-    @action( detail = True , methods = ['post'] ) 
-    def extension_book( self , request , pk = None ) : 
-        book = BorrowedBook.objects.filter( id = pk , borrower = request.user , is_returned = False ).first()
+        book.return_request_date = timezone.now()
+        book.save()
+        return Response(
+            {"Message": "لقد قمت بتقديم طلب استعادة بنجاح"}, status=status.HTTP_200_OK
+        )
 
-        if not book :
-            return Response({"ERROR" : "سجل الاستعارة غير موجود"} , status = status.HTTP_404_NOT_FOUND )
+    @action(detail=True, methods=["post"])
+    def extension_book(self, request, pk=None):
+        book = BorrowedBook.objects.filter(
+            id=pk, borrower=request.user, is_returned=False
+        ).first()
 
-        if book.extension_request == True :
-            return Response({"Message" : "لقد قمت بتقديم طلب تمديد بالفعل سابقا"} , status = status.HTTP_400_BAD_REQUEST )
+        if not book:
+            return Response(
+                {"ERROR": "سجل الاستعارة غير موجود"}, status=status.HTTP_404_NOT_FOUND
+            )
 
-        if book.is_extended == True :
-            return Response({"Message" : "تم تمديد مدة هذه الاستعارة سابقا"} , status = status.HTTP_400_BAD_REQUEST )
+        if book.extension_request == True:
+            return Response(
+                {"Message": "لقد قمت بتقديم طلب تمديد بالفعل سابقا"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if book.is_extended == True:
+            return Response(
+                {"Message": "تم تمديد مدة هذه الاستعارة سابقا"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         book.extension_request = True
         book.extension_request_date = timezone.localdate()
-        book.save(update_fields = ['extension_request','extension_request_date'])
-        
-        return Response({"Message" : "لقد قمت بتقديم طلب تمديد الإعارة بنجاح"} , status = status.HTTP_200_OK )
+        book.save(update_fields=["extension_request", "extension_request_date"])
+
+        return Response(
+            {"Message": "لقد قمت بتقديم طلب تمديد الإعارة بنجاح"},
+            status=status.HTTP_200_OK,
+        )
+
+
 """
 ### BorrwoedProfileView
 
@@ -315,13 +587,17 @@ Authenticated API for users to view and manage their own active borrowed books.
 
 """
 
-class RecoveredbooksProfileView( viewsets.ModelViewSet ) : 
-    queryset = BorrowedBook.objects.all() 
-    serializer_class = BarrowBookSerilaizers 
-    def get_queryset( self ) :
-        user = self.request.user 
-        queryset = BorrowedBook.objects.filter(borrower = user , is_returned = True ) 
-        return queryset 
+
+class RecoveredbooksProfileView(viewsets.ModelViewSet):
+    queryset = BorrowedBook.objects.all()
+    serializer_class = BarrowBookSerilaizers
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = BorrowedBook.objects.filter(borrower=user, is_returned=True)
+        return queryset
+
 
 """
 ### RecoveredbooksProfileView
@@ -345,18 +621,20 @@ Authenticated API for users to view their previously returned (recovered) books.
 """
 
 
-class FavoriteBooksProfileView( viewsets.ReadOnlyModelViewSet ) :
-    serializer_class = FavoriteBookSerializer 
+class FavoriteBooksProfileView(viewsets.ReadOnlyModelViewSet):
+    serializer_class = FavoriteBookSerializer
     queryset = Favorite_Book.objects.all()
-    
-    def get_queryset( self ) :
-        user = self.request.user 
-        return(
-             Favorite_Book.objects.filter( user = user , book__is_archived = False )
-           #  .select_related( "book" , "book__author" , "book__category") 
-            # .order_by("-created_at") 
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return (
+            Favorite_Book.objects.filter(user=user, book__is_archived=False)
+            #  .select_related( "book" , "book__author" , "book__category")
+            # .order_by("-created_at")
         )
-    
+
+
 """
 ### FavoriteBooksProfileView
 
@@ -378,40 +656,4 @@ Authenticated read-only API for users to browse their favorite (liked) books.
   - Auth required.
   - Returns details of a single favorite record that belongs to the current user, including the related book, author, and category data.
 
-"""
-
-class VerifyTokenAndRoleView( APIView ) :
-    authentication_classes = [TokenAuthentication] 
-    permission_classes = [IsAuthenticated]     
-
-    def get( self , request ) :
-        user = request.user 
-        is_admin = user.is_staff or user.is_superuser 
-
-        Json = {
-            "valid" : True , 
-            "role" : "admin" if is_admin else "user" , 
-            "is_admin": is_admin ,
-        }
-
-        return Response( Json , status = status.HTTP_200_OK )
-    
-"""
-### VerifyTokenAndRoleView
-
-Authenticated utility API for checking if a token is valid and determining the user's role.
-
-- **Verify token and get role**
-  - `GET /api/auth/verify-token/`
-  - Auth required (Token authentication).
-  - Behavior:
-    - Uses `TokenAuthentication` and `IsAuthenticated` to ensure:
-      - The provided token is valid.
-      - A logged-in user is attached to the request.
-    - Determines if the user is an admin:
-      - `is_admin = user.is_staff or user.is_superuser`
-    - Returns a JSON object with:
-      - `valid`: always `True` if the request reaches this view (token is valid).
-      - `role`: `"admin"` if user is staff or superuser, otherwise `"user"`.
-      - `is_admin`: boolean flag indicating admin status.
 """

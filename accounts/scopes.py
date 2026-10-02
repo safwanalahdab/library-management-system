@@ -1,0 +1,168 @@
+from django.db.models import Q
+
+from .models import CustomUser
+
+
+BUSINESS_ROLES = frozenset(CustomUser.Role.values)
+
+
+def is_authenticated_user(user):
+    return bool(user and user.is_authenticated)
+
+
+def is_superuser(user):
+    return is_authenticated_user(user) and user.is_superuser
+
+
+def get_effective_governorate(user):
+    if not is_authenticated_user(user):
+        return None
+    if user.governorate_id is not None:
+        return user.governorate
+    if user.library_id is not None:
+        return user.library.governorate
+    return None
+
+
+def get_effective_library(user):
+    if not is_authenticated_user(user) or user.library_id is None:
+        return None
+    return user.library
+
+
+def can_access_governorate(user, governorate):
+    if not is_authenticated_user(user) or governorate is None:
+        return False
+    if is_superuser(user) or user.role == CustomUser.Role.MINISTRY_ADMIN:
+        return True
+    return (
+        user.role == CustomUser.Role.GOVERNORATE_ADMIN
+        and user.governorate_id == governorate.pk
+    )
+
+
+def can_access_library(user, library):
+    if not is_authenticated_user(user) or library is None:
+        return False
+    if is_superuser(user) or user.role == CustomUser.Role.MINISTRY_ADMIN:
+        return True
+    if user.role == CustomUser.Role.GOVERNORATE_ADMIN:
+        return user.governorate_id == library.governorate_id
+    if user.role == CustomUser.Role.LIBRARIAN:
+        return user.library_id == library.pk
+    return False
+
+
+def can_access_user(actor, target):
+    if not is_authenticated_user(actor) or target is None:
+        return False
+    if actor.pk is not None and actor.pk == target.pk:
+        return True
+    if is_superuser(actor):
+        return True
+    if target.is_superuser:
+        return False
+
+    if actor.role == CustomUser.Role.MINISTRY_ADMIN:
+        return target.role in BUSINESS_ROLES
+
+    if actor.role == CustomUser.Role.GOVERNORATE_ADMIN:
+        if target.role not in {
+            CustomUser.Role.GOVERNORATE_ADMIN,
+            CustomUser.Role.LIBRARIAN,
+            CustomUser.Role.READER,
+        }:
+            return False
+        target_governorate = get_effective_governorate(target)
+        return (
+            target_governorate is not None
+            and actor.governorate_id == target_governorate.pk
+        )
+
+    if actor.role == CustomUser.Role.LIBRARIAN:
+        return (
+            target.role == CustomUser.Role.READER
+            and actor.library_id is not None
+            and actor.library_id == target.library_id
+        )
+
+    return False
+
+
+def users_accessible_to(actor):
+    """Return the user queryset visible to an actor under the business scope rules."""
+    queryset = CustomUser.objects.all()
+    if not is_authenticated_user(actor):
+        return queryset.none()
+    if is_superuser(actor):
+        return queryset
+    if actor.role == CustomUser.Role.MINISTRY_ADMIN:
+        return queryset.filter(is_superuser=False, role__in=BUSINESS_ROLES)
+    if actor.role == CustomUser.Role.GOVERNORATE_ADMIN:
+        return queryset.filter(is_superuser=False).filter(
+            Q(pk=actor.pk)
+            | Q(
+                role=CustomUser.Role.GOVERNORATE_ADMIN,
+                governorate_id=actor.governorate_id,
+            )
+            | Q(
+                role__in={CustomUser.Role.LIBRARIAN, CustomUser.Role.READER},
+                library__governorate_id=actor.governorate_id,
+            )
+        )
+    if actor.role == CustomUser.Role.LIBRARIAN:
+        return queryset.filter(is_superuser=False).filter(
+            Q(pk=actor.pk)
+            | Q(role=CustomUser.Role.READER, library_id=actor.library_id)
+        )
+    return queryset.filter(pk=actor.pk)
+
+
+def is_active_governorate(governorate):
+    return governorate is not None and governorate.is_active
+
+
+def is_active_library(library):
+    return (
+        library is not None
+        and library.is_active
+        and library.governorate.is_active
+    )
+
+
+def can_manage_user_status(actor, target):
+    """Return whether actor may deactivate/reactivate this business account."""
+    if (
+        not is_authenticated_user(actor)
+        or target is None
+        or target.is_superuser
+        or actor.pk == target.pk
+    ):
+        return False
+    if is_superuser(actor):
+        return target.role in BUSINESS_ROLES
+    if actor.role == CustomUser.Role.MINISTRY_ADMIN:
+        return target.role in {
+            CustomUser.Role.GOVERNORATE_ADMIN,
+            CustomUser.Role.LIBRARIAN,
+            CustomUser.Role.READER,
+        }
+    if actor.role == CustomUser.Role.GOVERNORATE_ADMIN:
+        return can_access_user(actor, target) and target.role in {
+            CustomUser.Role.LIBRARIAN,
+            CustomUser.Role.READER,
+        }
+    if actor.role == CustomUser.Role.LIBRARIAN:
+        return can_access_user(actor, target) and target.role == CustomUser.Role.READER
+    return False
+
+
+def has_active_user_scope(user):
+    """Return whether the organizational scope required by a business role is active."""
+    if user.role == CustomUser.Role.MINISTRY_ADMIN:
+        return user.governorate_id is None and user.library_id is None
+    if user.role == CustomUser.Role.GOVERNORATE_ADMIN:
+        return user.library_id is None and is_active_governorate(user.governorate)
+    if user.role in {CustomUser.Role.LIBRARIAN, CustomUser.Role.READER}:
+        return user.governorate_id is None and is_active_library(user.library)
+    return False
