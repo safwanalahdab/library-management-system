@@ -34,14 +34,21 @@ class Book ( models.Model ) :
     is_archived = models.BooleanField( default = False ) 
     pages = models.IntegerField( default = 0 )
     publication_year = models.IntegerField( null = True  ) 
-    isbn = models.CharField( null = True , max_length = 15 ) 
+    isbn = models.CharField( null = True , max_length = 15 )
+    # Each book record belongs to one library; its governorate comes from library.governorate.
+    library = models.ForeignKey(
+        "accounts.Library",
+        on_delete=models.PROTECT,
+        related_name="books",
+    )
 
     def save(self, *args, **kwargs):
      
      skip_recalc = kwargs.pop("skip_recalc", False)
     # إذا الكتاب جديد (ما له PK لسا)
      if self.pk is None:
-        self.available_copies = self.total_copies 
+        self.available_copies = self.total_copies
+        self.is_avaiable = self.available_copies > 0
         return super().save(*args, **kwargs)
      
      if skip_recalc:

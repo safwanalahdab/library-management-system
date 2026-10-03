@@ -332,12 +332,14 @@ class ProfileTests(APITestCase):
     def test_profile_contains_only_remaining_fields(self):
         author = Author.objects.create(name="Author")
         category = Category.objects.create(name="Category")
+        library = Library.objects.create(name="Library", governorate=self.user.governorate)
         book = Book.objects.create(
             title="Book",
             description="desc",
             author=author,
             category=category,
             total_copies=1,
+            library=library,
         )
         BorrowedBook.objects.create(book=book, borrower=self.user)
 
@@ -515,7 +517,13 @@ class ReaderScopeMigrationTests(TransactionTestCase):
         superuser = self.OldUser.objects.create(username="root", is_superuser=True, is_staff=True)
 
         author = Author.objects.create(name="Author")
-        book = Book.objects.create(title="Book", description="desc", author=author, total_copies=1)
+        book = Book.objects.create(
+            title="Book",
+            description="desc",
+            author=author,
+            total_copies=1,
+            library_id=library_a.pk,
+        )
         borrow = BorrowedBook.objects.create(book=book, borrower_id=reader_a.pk)
 
         self.migrate_forward()

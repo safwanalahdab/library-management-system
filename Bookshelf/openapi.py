@@ -26,6 +26,16 @@ DOCUMENTED_USER_ACTIONS = {
     "unblock_borrowing",
 }
 
+# Ready book actions. PUT is not supported and export is not documented yet.
+DOCUMENTED_BOOK_ACTIONS = {
+    "list",
+    "retrieve",
+    "create",
+    "partial_update",
+    "destroy",
+    "restore",
+}
+
 
 def keep_documented_endpoints(endpoints):
     """Limit OpenAPI output without changing the runtime URL configuration."""
@@ -44,6 +54,11 @@ def keep_documented_endpoints(endpoints):
         if view_key == ("dashboard.views", "UserAdminView"):
             action = getattr(callback, "actions", {}).get(method_upper.lower())
             if action in DOCUMENTED_USER_ACTIONS:
+                documented.append((path, path_regex, method, callback))
+
+        if view_key == ("dashboard.views", "BookAdminView"):
+            action = getattr(callback, "actions", {}).get(method_upper.lower())
+            if action in DOCUMENTED_BOOK_ACTIONS:
                 documented.append((path, path_regex, method, callback))
 
     return documented

@@ -1,5 +1,7 @@
 from django.db.models import Q
 
+from books.models import Book
+
 from .models import CustomUser, Library
 
 
@@ -114,6 +116,51 @@ def libraries_accessible_to(actor):
         if actor.governorate_id is None:
             return queryset.none()
         return queryset.filter(governorate_id=actor.governorate_id, is_active=True)
+    return queryset.none()
+
+
+def books_accessible_to(actor):
+    """Return the book queryset visible to an actor under the business scope rules.
+
+    Admin roles see archived books and books in inactive libraries inside their
+    scope. Readers see only non-archived books in active libraries of their own
+    active governorate.
+    """
+    if (
+        is_authenticated_user(actor)
+        and not is_superuser(actor)
+        and actor.role == CustomUser.Role.READER
+    ):
+        if actor.governorate_id is None:
+            return Book.objects.none()
+        return Book.objects.filter(
+            library__governorate_id=actor.governorate_id,
+            library__governorate__is_active=True,
+            library__is_active=True,
+            is_archived=False,
+        )
+    return books_manageable_by(actor)
+
+
+def books_manageable_by(actor):
+    """Return the books an actor may update, archive or restore.
+
+    Same organizational scope as the admin read scope, including archived books
+    and inactive libraries. Readers manage no books.
+    """
+    queryset = Book.objects.all()
+    if not is_authenticated_user(actor):
+        return queryset.none()
+    if is_superuser(actor) or actor.role == CustomUser.Role.MINISTRY_ADMIN:
+        return queryset
+    if actor.role == CustomUser.Role.GOVERNORATE_ADMIN:
+        if actor.governorate_id is None:
+            return queryset.none()
+        return queryset.filter(library__governorate_id=actor.governorate_id)
+    if actor.role == CustomUser.Role.LIBRARIAN:
+        if actor.library_id is None:
+            return queryset.none()
+        return queryset.filter(library_id=actor.library_id)
     return queryset.none()
 
 

@@ -18,6 +18,7 @@ class DashboardTestMixin:
             password=PASSWORD,
         )
         governorate = Governorate.objects.create(name="Governorate")
+        self.library = Library.objects.create(name="Library", governorate=governorate)
         self.reader = CustomUser.objects.create_user(
             username="reader",
             email="reader@example.com",
@@ -33,6 +34,7 @@ class DashboardTestMixin:
             author=self.author,
             category=self.category,
             total_copies=2,
+            library=self.library,
         )
 
 

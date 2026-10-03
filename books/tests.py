@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import CustomUser, Governorate
+from accounts.models import CustomUser, Governorate, Library
 from .models import Author, Book, BorrowedBook, Category
 
 
@@ -11,6 +11,7 @@ PASSWORD = "StrongPass123!"
 class BooksTestMixin:
     def setUp(self):
         self.governorate = Governorate.objects.create(name="Governorate")
+        self.library = Library.objects.create(name="Library", governorate=self.governorate)
         self.reader = self.create_reader("reader")
         self.author = Author.objects.create(name="Author One")
         self.category = Category.objects.create(name="Category One")
@@ -25,6 +26,7 @@ class BooksTestMixin:
         )
 
     def create_book(self, title="Book", total_copies=1, **extra):
+        extra.setdefault("library", self.library)
         return Book.objects.create(
             title=title,
             description="desc",
