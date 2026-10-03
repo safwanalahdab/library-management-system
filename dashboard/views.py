@@ -50,12 +50,14 @@ from accounts.scopes import (
     books_manageable_by,
     can_manage_user_status,
     has_active_user_scope,
+    is_superuser,
     readers_searchable_by,
     users_accessible_to,
 )
 from accounts.serializers import AdminPasswordResetSerializer
 from accounts.views import LibraryPagination
 
+from .query_params import parse_id_param
 from .serializers import (
     ReaderSearchResultSerializer,
     UserAdminCreateSerializer,
@@ -70,9 +72,6 @@ class ReaderSearchPagination(PageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = 50
 
-
-# Library and Governorate primary keys are BigAutoField (PostgreSQL bigint).
-MAX_FILTER_ID = 9223372036854775807
 
 
 class DashboardBookPagination(PageNumberPagination):
@@ -137,7 +136,8 @@ BOOK_PAGE_SCHEMA = inline_serializer(
             "LIBRARIAN يرى كتب مكتبته فقط، بما فيها المؤرشفة. "
             "READER يرى فقط الكتب غير المؤرشفة في المكتبات المفعّلة ضمن محافظته المفعّلة. "
             "يُطبَّق النطاق أولاً ثم الفلاتر ثم الترتيب ثم pagination، فالفلاتر تضيّق النطاق "
-            "ولا توسّعه أبداً (مثلاً governorate أو library خارج النطاق تعيد نتائج فارغة). "
+            "ولا توسّعه أبداً (مثلاً governorate أو library خارج النطاق تعيد نتائج فارغة؛ "
+            "ويُتجاهل library لأمين المكتبة لأن نطاقه مكتبته أصلاً). "
             "author وcategory بحث جزئي بالاسم؛ library وgovernorate معرّفات رقمية؛ "
             "is_archived وis_avaiable تقبلان true/false (أو 1/0). القيمة غير الصالحة تُرفض بـVALIDATION_ERROR. "
             "الترتيب: غير المؤرشف أولاً ثم الأكثر استعارة."
@@ -156,7 +156,10 @@ BOOK_PAGE_SCHEMA = inline_serializer(
                 description="بحث جزئي في اسم التصنيف ضمن النطاق.",
             ),
             OpenApiParameter(
-                name="library", type=int, required=False, description="معرّف المكتبة."
+                name="library",
+                type=int,
+                required=False,
+                description="معرّف المكتبة؛ يُتحقق منه لكن لا يُطبَّق على LIBRARIAN.",
             ),
             OpenApiParameter(
                 name="governorate", type=int, required=False, description="معرّف المحافظة."
@@ -350,18 +353,14 @@ class BookAdminView( ArabicApiResponseMixin, viewsets.ModelViewSet ) :
             ("library", "library_id", "يجب أن يكون معرّف المكتبة رقماً صحيحاً موجباً."),
             ("governorate", "library__governorate_id", "يجب أن يكون معرّف المحافظة رقماً صحيحاً موجباً."),
         )
+        user = self.request.user
+        # A librarian's scope is already their own library, so `library` is
+        # validated but not applied: it never narrows their list to nothing.
+        ignore_library = not is_superuser(user) and user.role == User.Role.LIBRARIAN
         for param, lookup, message in id_filters:
-            value = params.get(param)
-            if value in (None, ""):
+            object_id = parse_id_param(params, param, message)
+            if object_id is None or (param == "library" and ignore_library):
                 continue
-            try:
-                object_id = int(value)
-            except (TypeError, ValueError):
-                raise ValidationError({param: message})
-            # IDs are positive and must fit the integer column; larger values
-            # would otherwise overflow in PostgreSQL and fail with a 500.
-            if not 1 <= object_id <= MAX_FILTER_ID:
-                raise ValidationError({param: message})
             queryset = queryset.filter(**{lookup: object_id})
 
         for param in ("is_archived", "is_avaiable"):
@@ -763,7 +762,8 @@ class UserAdminView(
          operation_id="user_block_borrowing",
          summary="حظر الاستعارة لمستخدم",
          description=(
-             "المسار الفعلي يقبل `block_borrowing` و`block-borrowing` بسبب url_path الحالي."
+             "المسار المعتمد: block-borrowing. لا يقبل body. "
+             "المسار القديم block_borrowing ما زال مقبولاً مؤقتاً للتوافق وغير موثّق."
          ),
          request=None,
          responses={
@@ -782,7 +782,7 @@ class UserAdminView(
          detail=True,
          methods=["post"],
          permission_classes=[IsLibrarian, CanAccessUser],
-         url_path=r"block[_-]borrowing",
+         url_path="block-borrowing",
      )
      def block_borrowing(self, request, pk=None):
          user = self.get_object()
@@ -801,7 +801,8 @@ class UserAdminView(
          operation_id="user_unblock_borrowing",
          summary="إلغاء حظر الاستعارة لمستخدم",
          description=(
-             "المسار الفعلي يقبل `unblock_borrowing` و`unblock-borrowing` بسبب url_path الحالي."
+             "المسار المعتمد: unblock-borrowing. لا يقبل body. "
+             "المسار القديم unblock_borrowing ما زال مقبولاً مؤقتاً للتوافق وغير موثّق."
          ),
          request=None,
          responses={
@@ -820,7 +821,7 @@ class UserAdminView(
          detail=True,
          methods=["post"],
          permission_classes=[IsLibrarian, CanAccessUser],
-         url_path=r"unblock[_-]borrowing",
+         url_path="unblock-borrowing",
      )
      def unblock_borrowing(self, request, pk=None):
          user = self.get_object()
@@ -833,6 +834,28 @@ class UserAdminView(
              code="USER_BORROWING_UNBLOCKED",
              message="تم إلغاء حظر الاستعارة للمستخدم بنجاح.",
          )
+
+     # Deprecated underscore paths, kept for existing clients and hidden from
+     # the schema. Remove once the frontend uses block-borrowing/unblock-borrowing.
+     @extend_schema(exclude=True)
+     @action(
+         detail=True,
+         methods=["post"],
+         permission_classes=[IsLibrarian, CanAccessUser],
+         url_path="block_borrowing",
+     )
+     def block_borrowing_legacy(self, request, pk=None):
+         return self.block_borrowing(request, pk=pk)
+
+     @extend_schema(exclude=True)
+     @action(
+         detail=True,
+         methods=["post"],
+         permission_classes=[IsLibrarian, CanAccessUser],
+         url_path="unblock_borrowing",
+     )
+     def unblock_borrowing_legacy(self, request, pk=None):
+         return self.unblock_borrowing(request, pk=pk)
 
      @extend_schema(
          tags=["User Management"],

@@ -263,7 +263,11 @@ class BookFilterScopeTests(BookFilterTestMixin, APITestCase):
         )
 
     def test_librarian_cannot_expand_scope_with_library(self):
-        self.assertEqual(self.ids(self.librarian_a1, library=self.library_a2.id), set())
+        # `library` is ignored for librarians: their scope is already their library.
+        self.assertEqual(
+            self.ids(self.librarian_a1, library=self.library_a2.id),
+            self.expect(self.a1_poetry, self.a1_archived, self.a1_empty),
+        )
         self.assertEqual(self.ids(self.librarian_a1, governorate=self.gov_b.id), set())
         self.assertEqual(
             self.ids(self.librarian_a1, library=self.library_a1.id),

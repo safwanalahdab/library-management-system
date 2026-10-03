@@ -12,6 +12,7 @@ DOCUMENTED_API_METHODS = {
     ("accounts.views", "RegisterView"): {"POST"},
     ("accounts.views", "GovernorateListView"): {"GET"},
     ("accounts.views", "LibraryViewSet"): {"GET", "POST", "PATCH"},
+    ("dashboard.borrowing_views", "BookBorrowRequestCreateView"): {"POST"},
 }
 
 DOCUMENTED_USER_ACTIONS = {
@@ -45,11 +46,18 @@ DOCUMENTED_CATALOG_ACTIONS = {
     "destroy",
 }
 
+# New borrowing system only; legacy borrowing endpoints stay hidden.
+# Readers create requests via POST /dashboard/books/{id}/borrow-requests/.
+DOCUMENTED_BORROW_REQUEST_ACTIONS = {"list", "retrieve", "approve", "reject"}
+DOCUMENTED_BORROW_ACTIONS = {"list", "retrieve", "create", "return_borrow"}
+
 DOCUMENTED_VIEWSET_ACTIONS = {
     ("dashboard.views", "UserAdminView"): DOCUMENTED_USER_ACTIONS,
     ("dashboard.views", "BookAdminView"): DOCUMENTED_BOOK_ACTIONS,
     ("dashboard.views", "AuthorAdminView"): DOCUMENTED_CATALOG_ACTIONS,
     ("dashboard.views", "CategoryAdminView"): DOCUMENTED_CATALOG_ACTIONS,
+    ("dashboard.borrowing_views", "BorrowRequestViewSet"): DOCUMENTED_BORROW_REQUEST_ACTIONS,
+    ("dashboard.borrowing_views", "BorrowViewSet"): DOCUMENTED_BORROW_ACTIONS,
 }
 
 

@@ -127,3 +127,120 @@ class BorrowedBook ( models.Model ) :
           return ( ( today - date ).days ) 
        
     #Returns the number of days this borrowing is late.
+
+
+# New borrowing system. It lives beside the legacy BorrowedBook until data is
+# migrated. Workflow, quantities and permissions belong to a service layer;
+# these models only store state and enforce uniqueness at the database level.
+#
+# History is kept: users and books are deactivated/archived instead of deleted,
+# so every relation uses PROTECT and a delete that would erase history fails.
+
+
+class BorrowRequest(models.Model):
+    """A reader's request to borrow a book; library/governorate come from book."""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "قيد المراجعة"
+        APPROVED = "APPROVED", "مقبول"
+        REJECTED = "REJECTED", "مرفوض"
+
+    reader = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="borrow_requests",
+    )
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.PROTECT,
+        related_name="borrow_requests",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="decided_borrow_requests",
+    )
+    rejection_reason = models.TextField(blank=True, default="")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["reader", "book"],
+                condition=models.Q(status="PENDING"),
+                name="books_borrowrequest_one_pending_per_reader_book",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.reader_id} → {self.book_id} ({self.status})"
+
+
+class Borrow(models.Model):
+    """A book actually handed to a reader, from an approved request or directly."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "نشطة"
+        RETURNED = "RETURNED", "مُرجعة"
+
+    reader = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="borrows",
+    )
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.PROTECT,
+        related_name="borrows",
+    )
+    # Null for a direct borrow. One-to-one so a request yields at most one borrow.
+    request = models.OneToOneField(
+        BorrowRequest,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="borrow",
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
+    borrowed_at = models.DateTimeField(auto_now_add=True)
+    returned_at = models.DateTimeField(null=True, blank=True)
+    # The service layer always sets the staff member; null is kept only for
+    # borrows migrated later from BorrowedBook, which never recorded one.
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="created_borrows",
+    )
+    returned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="returned_borrows",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["reader", "book"],
+                condition=models.Q(status="ACTIVE"),
+                name="books_borrow_one_active_per_reader_book",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.reader_id} → {self.book_id} ({self.status})"

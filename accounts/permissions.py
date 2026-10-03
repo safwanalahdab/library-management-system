@@ -55,6 +55,18 @@ class IsReader(HasMinimumBusinessRole):
     required_role = CustomUser.Role.READER
 
 
+class IsReaderRole(BasePermission):
+    """Allows readers only; superusers and staff roles act on behalf of readers elsewhere."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        return (
+            is_authenticated_user(user)
+            and not is_superuser(user)
+            and user.role == CustomUser.Role.READER
+        )
+
+
 class CanAccessUser(BasePermission):
     """Applies the centralized actor-to-user scope rule to a user object."""
 

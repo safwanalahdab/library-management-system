@@ -164,6 +164,30 @@ def books_manageable_by(actor):
     return queryset.none()
 
 
+def borrowing_records_visible_to(actor, queryset):
+    """Scope a BorrowRequest or Borrow queryset (both have `reader` and `book`).
+
+    Readers see their own records. Operators see records of books they manage:
+    librarians their library, governorate admins their governorate, ministry
+    admins and superusers everything.
+    """
+    if not is_authenticated_user(actor):
+        return queryset.none()
+    if is_superuser(actor) or actor.role == CustomUser.Role.MINISTRY_ADMIN:
+        return queryset
+    if actor.role == CustomUser.Role.GOVERNORATE_ADMIN:
+        if actor.governorate_id is None:
+            return queryset.none()
+        return queryset.filter(book__library__governorate_id=actor.governorate_id)
+    if actor.role == CustomUser.Role.LIBRARIAN:
+        if actor.library_id is None:
+            return queryset.none()
+        return queryset.filter(book__library_id=actor.library_id)
+    if actor.role == CustomUser.Role.READER:
+        return queryset.filter(reader_id=actor.pk)
+    return queryset.none()
+
+
 def users_accessible_to(actor):
     """Return the user queryset visible to an actor under the business scope rules."""
     queryset = CustomUser.objects.all()
