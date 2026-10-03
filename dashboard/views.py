@@ -54,6 +54,7 @@ from accounts.scopes import (
     users_accessible_to,
 )
 from accounts.serializers import AdminPasswordResetSerializer
+from accounts.views import LibraryPagination
 
 from .serializers import (
     ReaderSearchResultSerializer,
@@ -68,6 +69,10 @@ class ReaderSearchPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = "page_size"
     max_page_size = 50
+
+
+# Library and Governorate primary keys are BigAutoField (PostgreSQL bigint).
+MAX_FILTER_ID = 9223372036854775807
 
 
 class DashboardBookPagination(PageNumberPagination):
@@ -131,8 +136,11 @@ BOOK_PAGE_SCHEMA = inline_serializer(
             "GOVERNORATE_ADMIN يرى كتب جميع مكتبات محافظته فقط، بما فيها المؤرشفة وكتب المكتبات غير المفعّلة. "
             "LIBRARIAN يرى كتب مكتبته فقط، بما فيها المؤرشفة. "
             "READER يرى فقط الكتب غير المؤرشفة في المكتبات المفعّلة ضمن محافظته المفعّلة. "
-            "يُطبَّق النطاق أولاً ثم فلاتر author وcategory ثم الترتيب ثم pagination، "
-            "فلا يمكن لأي فلتر توسيع النطاق. الترتيب: غير المؤرشف أولاً ثم الأكثر استعارة."
+            "يُطبَّق النطاق أولاً ثم الفلاتر ثم الترتيب ثم pagination، فالفلاتر تضيّق النطاق "
+            "ولا توسّعه أبداً (مثلاً governorate أو library خارج النطاق تعيد نتائج فارغة). "
+            "author وcategory بحث جزئي بالاسم؛ library وgovernorate معرّفات رقمية؛ "
+            "is_archived وis_avaiable تقبلان true/false (أو 1/0). القيمة غير الصالحة تُرفض بـVALIDATION_ERROR. "
+            "الترتيب: غير المؤرشف أولاً ثم الأكثر استعارة."
         ),
         parameters=[
             OpenApiParameter(
@@ -147,6 +155,18 @@ BOOK_PAGE_SCHEMA = inline_serializer(
                 required=False,
                 description="بحث جزئي في اسم التصنيف ضمن النطاق.",
             ),
+            OpenApiParameter(
+                name="library", type=int, required=False, description="معرّف المكتبة."
+            ),
+            OpenApiParameter(
+                name="governorate", type=int, required=False, description="معرّف المحافظة."
+            ),
+            OpenApiParameter(
+                name="is_archived", type=bool, required=False, description="true أو false."
+            ),
+            OpenApiParameter(
+                name="is_avaiable", type=bool, required=False, description="true أو false."
+            ),
             OpenApiParameter(name="page", type=int, required=False),
             OpenApiParameter(
                 name="page_size", type=int, required=False, description="بحد أقصى 10."
@@ -157,6 +177,7 @@ BOOK_PAGE_SCHEMA = inline_serializer(
                 "BookListSuccessEnvelope", BOOK_PAGE_SCHEMA, ["BOOKS_RETRIEVED"]
             ),
             401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+            400: error_response("VALIDATION_ERROR عند قيمة فلتر غير صالحة."),
             403: error_response("PERMISSION_DENIED لمستخدم بلا دور صالح."),
             429: error_response("THROTTLED."),
         },
@@ -311,11 +332,50 @@ class BookAdminView( ArabicApiResponseMixin, viewsets.ModelViewSet ) :
         author = self.request.query_params.get('author') 
         category = self.request.query_params.get('category') 
 
-        if author : 
-            queryset = queryset.filter( author__name__icontains = author ) 
-        if category : 
-            queryset = queryset.filter( category__name__icontains = category ) 
-        
+        if author :
+            queryset = queryset.filter( author__name__icontains = author )
+        if category :
+            queryset = queryset.filter( category__name__icontains = category )
+
+        if self.action == "list":
+            queryset = self._apply_list_filters(queryset)
+
+        return queryset
+
+    def _apply_list_filters(self, queryset):
+        """List-only filters. They run on the scoped queryset, so they only narrow it."""
+        params = self.request.query_params
+
+        id_filters = (
+            ("library", "library_id", "يجب أن يكون معرّف المكتبة رقماً صحيحاً موجباً."),
+            ("governorate", "library__governorate_id", "يجب أن يكون معرّف المحافظة رقماً صحيحاً موجباً."),
+        )
+        for param, lookup, message in id_filters:
+            value = params.get(param)
+            if value in (None, ""):
+                continue
+            try:
+                object_id = int(value)
+            except (TypeError, ValueError):
+                raise ValidationError({param: message})
+            # IDs are positive and must fit the integer column; larger values
+            # would otherwise overflow in PostgreSQL and fail with a 500.
+            if not 1 <= object_id <= MAX_FILTER_ID:
+                raise ValidationError({param: message})
+            queryset = queryset.filter(**{lookup: object_id})
+
+        for param in ("is_archived", "is_avaiable"):
+            value = params.get(param)
+            if value in (None, ""):
+                continue
+            value = value.strip().lower()
+            if value in {"true", "1"}:
+                queryset = queryset.filter(**{param: True})
+            elif value in {"false", "0"}:
+                queryset = queryset.filter(**{param: False})
+            else:
+                raise ValidationError({param: "القيم المسموحة: true أو false."})
+
         return queryset
 
     @action(detail=False, methods=["get"], permission_classes=[IsAdminUser], url_path="export")
@@ -1003,64 +1063,230 @@ Provides a summary of key statistics for the admin dashboard, including counts o
 
 """
 
-class CategoryAdminView( viewsets.ModelViewSet ) : 
-    queryset = Category.objects.all() 
-    serializer_class = CategorySerializers 
-    permission_classes = [IsAdminUser] 
-    
-    def get_queryset ( self ) :
-        queryset = Category.objects.all()
-        category = self.request.query_params.get("category")
-        if category:
-         queryset = queryset.filter(
-            Q(name__icontains=category)
-        )
-        return queryset 
+class CatalogMetadataViewSet(ArabicApiResponseMixin, viewsets.ModelViewSet):
+    """Shared API for global catalog metadata (authors, categories).
 
-"""
+    Records are system-wide: they have no governorate or library owner.
+    Permissions are per action; widening writes to librarians later only needs
+    `write_permission` changed to IsLibrarian.
+    """
 
-### CategoryAdminView
-### PUT /dashboard/categories/{id}/
-### PATCH /dashboard/categories/{id}/
+    # Same page sizes as libraries: 20 per page, page_size up to 100.
+    pagination_class = LibraryPagination
+    # PUT is not supported; edits go through PATCH only.
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    write_permission = IsGovernorateAdmin
+    action_permissions = {
+        "list": IsReader,
+        "retrieve": IsLibrarian,
+    }
+    write_actions = frozenset({"create", "partial_update", "destroy"})
+    # Old query parameter kept as a temporary alias of `search`.
+    legacy_search_param = None
+    delete_in_use_message = None
 
-**Description**  
-Updates an existing category (full update with PUT, partial update with PATCH).
+    def get_permissions(self):
+        method = getattr(self.request, "method", "") or ""
+        if method and method.lower() not in self.http_method_names:
+            # Unsupported methods (PUT) never reach a handler; skipping the
+            # permission check lets DRF answer 405 instead of 403.
+            return []
+        if self.action in self.write_actions:
+            return [self.write_permission()]
+        return [self.action_permissions.get(self.action, IsLibrarian)()]
 
-**Permissions**  
-- `IsAdminUser`
+    def get_queryset(self):
+        queryset = self.queryset.model.objects.all()
+        if self.action == "list":
+            params = self.request.query_params
+            # `search` wins when both it and the legacy alias are sent.
+            search = params.get("search")
+            if search is None and self.legacy_search_param:
+                search = params.get(self.legacy_search_param)
+            search = (search or "").strip()
+            if search:
+                queryset = queryset.filter(name__icontains=search)
+        return queryset.order_by("name", "id")
 
----
+    def is_in_use(self, instance):
+        raise NotImplementedError
 
-### DELETE /dashboard/categories/{id}/
-
-**Description**  
-Deletes a category.
-
-**Permissions**  
-- `IsAdminUser`
-
-**Response (204 No Content)**  
-Category successfully deleted.
-
-"""
-
-class AuthorAdminView( viewsets.ModelViewSet ) : 
-    queryset = Author.objects.all() 
-    serializer_class = AuthorSerializers 
-    permission_classes = [ IsAdminUser ] 
-    def get_queryset ( self ) :
-        queryset = Author.objects.all()
-        author = self.request.query_params.get("author")
-        if author:
-         queryset = queryset.filter(
-            Q(name__icontains=author)
-        )
-        return queryset 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        # Book.author/category use SET_NULL; refuse instead of unlinking books.
+        # The row lock makes concurrent book writes that reference this record
+        # wait, so the check and the delete see the same linked books.
+        with transaction.atomic():
+            locked = self.queryset.model.objects.select_for_update().get(pk=instance.pk)
+            if self.is_in_use(locked):
+                raise ValidationError({"detail": self.delete_in_use_message})
+            locked.delete()
+        return Response(None, status=status.HTTP_200_OK)
 
 
-"""
-### AuthorAdminView
+def _catalog_schema_view(tag, prefix, label, serializer_class, codes, search_alias):
+    page_schema = inline_serializer(
+        name=f"{prefix.title()}Page",
+        fields={
+            "count": serializers.IntegerField(),
+            "next": serializers.URLField(allow_null=True),
+            "previous": serializers.URLField(allow_null=True),
+            "results": serializer_class(many=True),
+        },
+    )
+    envelope = prefix.title()
+    common_errors = {
+        401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+        429: error_response("THROTTLED."),
+    }
+    write_rules = (
+        f"متاح لـSUPERUSER وMINISTRY_ADMIN وGOVERNORATE_ADMIN؛ LIBRARIAN وREADER ممنوعان (403). "
+        f"{label} بيانات عامة على مستوى النظام وليست مرتبطة بمحافظة أو مكتبة."
+    )
+    return extend_schema_view(
+        list=extend_schema(
+            tags=[tag],
+            operation_id=f"{prefix}_list",
+            summary=f"قائمة {label}",
+            description=(
+                "متاح لجميع الأدوار (SUPERUSER وMINISTRY_ADMIN وGOVERNORATE_ADMIN وLIBRARIAN وREADER). "
+                f"{label} عامة على مستوى النظام. الترتيب حسب الاسم ثم المعرّف. "
+                f"`search` بحث جزئي غير حساس لحالة الأحرف في name. `{search_alias}` اسم قديم مؤقت "
+                "لنفس البحث؛ إذا أُرسل الاثنان تكون الأولوية لـsearch."
+            ),
+            parameters=[
+                OpenApiParameter(name="search", type=str, required=False, description="بحث جزئي في الاسم."),
+                OpenApiParameter(
+                    name=search_alias,
+                    type=str,
+                    required=False,
+                    deprecated=True,
+                    description="اسم قديم لـsearch، يُتجاهل عند إرسال search.",
+                ),
+                OpenApiParameter(name="page", type=int, required=False),
+                OpenApiParameter(name="page_size", type=int, required=False, description="بحد أقصى 100."),
+            ],
+            responses={
+                200: success_envelope(f"{envelope}ListSuccessEnvelope", page_schema, [codes["list"]]),
+                403: error_response("PERMISSION_DENIED لمستخدم بلا دور صالح."),
+                **common_errors,
+            },
+        ),
+        retrieve=extend_schema(
+            tags=[tag],
+            operation_id=f"{prefix}_retrieve",
+            summary=f"جلب عنصر من {label}",
+            description="متاح لـSUPERUSER وMINISTRY_ADMIN وGOVERNORATE_ADMIN وLIBRARIAN؛ READER ممنوع (403).",
+            responses={
+                200: success_envelope(f"{envelope}RetrieveSuccessEnvelope", serializer_class(), [codes["retrieve"]]),
+                403: error_response("PERMISSION_DENIED للقارئ."),
+                404: error_response("NOT_FOUND."),
+                **common_errors,
+            },
+        ),
+        create=extend_schema(
+            tags=[tag],
+            operation_id=f"{prefix}_create",
+            summary=f"إضافة عنصر إلى {label}",
+            description=(
+                f"{write_rules} name إلزامي، لا يقبل null أو قيمة فارغة أو مسافات فقط، "
+                "وتُحذف المسافات في بدايته ونهايته قبل الحفظ."
+            ),
+            request=serializer_class,
+            responses={
+                201: success_envelope(f"{envelope}CreateSuccessEnvelope", serializer_class(), [codes["create"]]),
+                400: error_response("VALIDATION_ERROR مع أخطاء name."),
+                403: error_response("PERMISSION_DENIED لأمين المكتبة والقارئ."),
+                **common_errors,
+            },
+        ),
+        partial_update=extend_schema(
+            tags=[tag],
+            operation_id=f"{prefix}_update",
+            summary=f"تعديل عنصر من {label}",
+            description=f"{write_rules} PATCH فقط؛ PUT غير مدعوم ويعيد 405. نفس قواعد name.",
+            request=serializer_class,
+            responses={
+                200: success_envelope(f"{envelope}UpdateSuccessEnvelope", serializer_class(), [codes["partial_update"]]),
+                400: error_response("VALIDATION_ERROR مع أخطاء name."),
+                403: error_response("PERMISSION_DENIED لأمين المكتبة والقارئ."),
+                404: error_response("NOT_FOUND."),
+                **common_errors,
+            },
+        ),
+        destroy=extend_schema(
+            tags=[tag],
+            operation_id=f"{prefix}_delete",
+            summary=f"حذف عنصر من {label}",
+            description=(
+                f"{write_rules} حذف فعلي مسموح فقط إذا لم يكن العنصر مرتبطاً بأي كتاب؛ "
+                "العنصر المرتبط بكتب يُرفض بـVALIDATION_ERROR ولا تتغير الكتب."
+            ),
+            responses={
+                200: success_envelope(
+                    f"{envelope}DeleteSuccessEnvelope",
+                    serializers.JSONField(allow_null=True),
+                    [codes["destroy"]],
+                ),
+                400: error_response("VALIDATION_ERROR عندما يكون العنصر مرتبطاً بكتب."),
+                403: error_response("PERMISSION_DENIED لأمين المكتبة والقارئ."),
+                404: error_response("NOT_FOUND."),
+                **common_errors,
+            },
+        ),
+    )
 
-Admin CRUD API for managing authors.
 
-"""
+CATEGORY_RESPONSE_MESSAGES = {
+    "list": ("CATEGORIES_RETRIEVED", "تم جلب التصنيفات بنجاح."),
+    "retrieve": ("CATEGORY_RETRIEVED", "تم جلب بيانات التصنيف بنجاح."),
+    "create": ("CATEGORY_CREATED", "تم إنشاء التصنيف بنجاح."),
+    "partial_update": ("CATEGORY_UPDATED", "تم تحديث بيانات التصنيف بنجاح."),
+    "destroy": ("CATEGORY_DELETED", "تم حذف التصنيف بنجاح."),
+}
+
+AUTHOR_RESPONSE_MESSAGES = {
+    "list": ("AUTHORS_RETRIEVED", "تم جلب المؤلفين بنجاح."),
+    "retrieve": ("AUTHOR_RETRIEVED", "تم جلب بيانات المؤلف بنجاح."),
+    "create": ("AUTHOR_CREATED", "تم إنشاء المؤلف بنجاح."),
+    "partial_update": ("AUTHOR_UPDATED", "تم تحديث بيانات المؤلف بنجاح."),
+    "destroy": ("AUTHOR_DELETED", "تم حذف المؤلف بنجاح."),
+}
+
+
+@_catalog_schema_view(
+    tag="Category Management",
+    prefix="categories",
+    label="التصنيفات",
+    serializer_class=CategorySerializers,
+    codes={action: spec[0] for action, spec in CATEGORY_RESPONSE_MESSAGES.items()},
+    search_alias="category",
+)
+class CategoryAdminView(CatalogMetadataViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializers
+    success_response_messages = CATEGORY_RESPONSE_MESSAGES
+    legacy_search_param = "category"
+    delete_in_use_message = "لا يمكن حذف التصنيف لأنه مرتبط بكتب موجودة."
+
+    def is_in_use(self, instance):
+        return Book.objects.filter(category=instance).exists()
+
+
+@_catalog_schema_view(
+    tag="Author Management",
+    prefix="authors",
+    label="المؤلفين",
+    serializer_class=AuthorSerializers,
+    codes={action: spec[0] for action, spec in AUTHOR_RESPONSE_MESSAGES.items()},
+    search_alias="author",
+)
+class AuthorAdminView(CatalogMetadataViewSet):
+    queryset = Author.objects.all()
+    serializer_class = AuthorSerializers
+    success_response_messages = AUTHOR_RESPONSE_MESSAGES
+    legacy_search_param = "author"
+    delete_in_use_message = "لا يمكن حذف المؤلف لأنه مرتبط بكتب موجودة."
+
+    def is_in_use(self, instance):
+        return Book.objects.filter(author=instance).exists()

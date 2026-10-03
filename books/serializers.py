@@ -9,17 +9,34 @@ from accounts.scopes import is_active_library, is_superuser, libraries_accessibl
 from accounts.models import CustomUser
 from .models import Author, Book, BorrowedBook, Category
 
+def catalog_name_field(required_message):
+    """Required, non-blank name; surrounding whitespace is trimmed before saving."""
+    return serializers.CharField(
+        max_length=100,
+        trim_whitespace=True,
+        error_messages={
+            "required": required_message,
+            "null": required_message,
+            "blank": required_message,
+            "invalid": required_message,
+            "max_length": "يجب ألا يتجاوز الاسم 100 حرف.",
+        },
+    )
+
+
 class AuthorSerializers ( serializers.ModelSerializer ) :
+    name = catalog_name_field("يجب إدخال اسم المؤلف.")
 
-    class Meta : 
+    class Meta :
         model = Author
-        fields = "__all__" 
+        fields = "__all__"
 
-class CategorySerializers (serializers.ModelSerializer ) : 
+class CategorySerializers (serializers.ModelSerializer ) :
+    name = catalog_name_field("يجب إدخال اسم التصنيف.")
 
-    class Meta : 
-        model = Category 
-        fields = "__all__" 
+    class Meta :
+        model = Category
+        fields = "__all__"
 
 class BookSerializers ( serializers.ModelSerializer ) :
     author = AuthorSerializers( read_only = True ) 

@@ -36,6 +36,22 @@ DOCUMENTED_BOOK_ACTIONS = {
     "restore",
 }
 
+# Global catalog metadata (authors, categories). PUT is not supported.
+DOCUMENTED_CATALOG_ACTIONS = {
+    "list",
+    "retrieve",
+    "create",
+    "partial_update",
+    "destroy",
+}
+
+DOCUMENTED_VIEWSET_ACTIONS = {
+    ("dashboard.views", "UserAdminView"): DOCUMENTED_USER_ACTIONS,
+    ("dashboard.views", "BookAdminView"): DOCUMENTED_BOOK_ACTIONS,
+    ("dashboard.views", "AuthorAdminView"): DOCUMENTED_CATALOG_ACTIONS,
+    ("dashboard.views", "CategoryAdminView"): DOCUMENTED_CATALOG_ACTIONS,
+}
+
 
 def keep_documented_endpoints(endpoints):
     """Limit OpenAPI output without changing the runtime URL configuration."""
@@ -51,14 +67,10 @@ def keep_documented_endpoints(endpoints):
             documented.append((path, path_regex, method, callback))
             continue
 
-        if view_key == ("dashboard.views", "UserAdminView"):
+        documented_actions = DOCUMENTED_VIEWSET_ACTIONS.get(view_key)
+        if documented_actions:
             action = getattr(callback, "actions", {}).get(method_upper.lower())
-            if action in DOCUMENTED_USER_ACTIONS:
-                documented.append((path, path_regex, method, callback))
-
-        if view_key == ("dashboard.views", "BookAdminView"):
-            action = getattr(callback, "actions", {}).get(method_upper.lower())
-            if action in DOCUMENTED_BOOK_ACTIONS:
+            if action in documented_actions:
                 documented.append((path, path_regex, method, callback))
 
     return documented
