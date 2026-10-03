@@ -51,6 +51,367 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
           description: THROTTLED.
+  /accounts/governorates:
+    get:
+      operationId: governorates_active_list
+      description: قائمة عامة بالمحافظات الفعالة (المعرّف والاسم فقط) لاستخدامها في
+        التسجيل.
+      summary: قائمة المحافظات الفعالة
+      tags:
+      - Authentication
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GovernorateListSuccessEnvelope'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /accounts/libraries/:
+    get:
+      operationId: libraries_list
+      description: 'MINISTRY_ADMIN: جميع المكتبات المفعّلة وغير المفعّلة. GOVERNORATE_ADMIN:
+        مكتبات محافظته. LIBRARIAN: مكتبته فقط ولو كانت غير مفعّلة. READER: المكتبات
+        المفعّلة ضمن محافظته فقط. الفلاتر تضيّق النطاق المسموح ولا توسّعه. الترتيب
+        حسب الاسم ثم المعرّف.'
+      summary: قائمة المكتبات ضمن نطاق مقدم الطلب
+      parameters:
+      - in: query
+        name: governorate
+        schema:
+          type: integer
+        description: معرّف المحافظة.
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+        description: true أو false.
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: بحد أقصى 100.
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: بحث جزئي في اسم المكتبة.
+      tags:
+      - Library Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLibraryListSuccessEnvelopeList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR عند قيمة فلتر غير صالحة.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED لحساب بلا دور صالح.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+    post:
+      operationId: libraries_create
+      description: متاح لـMINISTRY_ADMIN وGOVERNORATE_ADMIN. الوزارة تحدد governorate
+        (محافظة فعالة). مسؤول المحافظة تُعيَّن محافظته تلقائياً، وإرسال محافظة مختلفة
+        يُرفض. المكتبة الجديدة مفعّلة دائماً؛ إرسال is_active أو أي حقل غير مسموح
+        يُرفض بـVALIDATION_ERROR.
+      summary: إنشاء مكتبة
+      tags:
+      - Library Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Library'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Library'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Library'
+        required: true
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryCreateSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR مع تفاصيل الحقول.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED لأمين المكتبة والقارئ.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /accounts/libraries/{id}/:
+    get:
+      operationId: libraries_retrieve
+      description: المكتبة خارج نطاق مقدم الطلب تعاد كـNOT_FOUND دون كشف وجودها.
+      summary: جلب مكتبة ضمن النطاق
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this library.
+        required: true
+      tags:
+      - Library Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryRetrieveSuccessEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED لحساب بلا دور صالح.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND، ويشمل المكتبة خارج النطاق.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+    patch:
+      operationId: libraries_update
+      description: 'الحقول المسموحة: name وaddress وphone وemail. متاح لـMINISTRY_ADMIN
+        وGOVERNORATE_ADMIN ضمن نطاقه ولـLIBRARIAN على مكتبته فقط. لا يمكن تغيير governorate
+        بعد الإنشاء (إرسال القيمة الحالية مقبول دون أثر). إرسال is_active أو أي حقل
+        غير مسموح يُرفض بـVALIDATION_ERROR.'
+      summary: تعديل بيانات مكتبة
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this library.
+        required: true
+      tags:
+      - Library Management
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLibrary'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLibrary'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLibrary'
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryUpdateSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR مع تفاصيل الحقول.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED للقارئ.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND، ويشمل المكتبة خارج النطاق.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /accounts/libraries/{id}/activate/:
+    post:
+      operationId: library_activate
+      description: متاح لـMINISTRY_ADMIN وGOVERNORATE_ADMIN ضمن نطاقه. التكرار لا
+        يسبب خطأ.
+      summary: تفعيل مكتبة
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this library.
+        required: true
+      tags:
+      - Library Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryActivateSuccessEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED لأمين المكتبة والقارئ.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND، ويشمل المكتبة خارج النطاق.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
+  /accounts/libraries/{id}/deactivate/:
+    post:
+      operationId: library_deactivate
+      description: متاح لـMINISTRY_ADMIN وGOVERNORATE_ADMIN ضمن نطاقه. لا يحذف المكتبة
+        ولا علاقاتها، ولا يغيّر حالة حسابات المستخدمين المرتبطين بها. التكرار لا يسبب
+        خطأ.
+      summary: إلغاء تفعيل مكتبة
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this library.
+        required: true
+      tags:
+      - Library Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryDeactivateSuccessEnvelope'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED لأمين المكتبة والقارئ.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: NOT_FOUND، ويشمل المكتبة خارج النطاق.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
   /accounts/login:
     post:
       operationId: auth_login
@@ -186,9 +547,10 @@ paths:
           description: THROTTLED.
     put:
       operationId: profile_replace
-      description: الحقول القابلة للتعديل موضحة في request schema. لا يمكن تعديل role
-        أو governorate أو library أو is_active أو is_staff أو is_superuser أو password
-        أو borrowing_blocked.
+      description: الحقول القابلة للتعديل موضحة في request schema. إرسال role أو is_active
+        أو is_staff أو is_superuser أو groups أو user_permissions أو password يُرفض
+        بـVALIDATION_ERROR، وكذلك governorate أو library بقيمة تختلف عن القيمة الحالية.
+        borrowing_blocked للقراءة فقط.
       summary: تحديث الملف الشخصي بالكامل
       tags:
       - Profile
@@ -234,8 +596,8 @@ paths:
     patch:
       operationId: profile_update
       description: 'يسمح فقط بـemail وfirst_name وlast_name وحقول profile: address
-        وphone وgender وage. حقول الدور والنطاق والحالة وكلمة المرور وحظر الاستعارة
-        غير قابلة للتعديل هنا.'
+        وphone وgender وage. إرسال حقول الدور أو الصلاحيات أو كلمة المرور، أو تغيير
+        governorate أو library، يُرفض بـVALIDATION_ERROR.'
       summary: تحديث جزئي للملف الشخصي
       tags:
       - Profile
@@ -313,12 +675,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
           description: THROTTLED.
+  /accounts/register:
+    post:
+      operationId: auth_register
+      description: ينشئ حساب READER دائماً ضمن محافظة فعالة يختارها المستخدم، دون
+        مكتبة. لا يقبل role أو library أو أي حقول إدارية مثل is_staff وis_superuser
+        وgroups وuser_permissions. لا يسجّل الدخول تلقائياً.
+      summary: تسجيل حساب قارئ جديد
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR مع تفاصيل الحقول.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
   /dashboard/users/:
     get:
       operationId: users_list
-      description: 'النتائج scoped حسب السياسة الحالية: SUPERUSER لجميع المستخدمين
-        الذين يعيدهم queryset الحالي، MINISTRY_ADMIN لمستخدمي النظام، GOVERNORATE_ADMIN
-        ضمن محافظته، وLIBRARIAN لنفسه وReaders ضمن مكتبته. READER يخضع للصلاحيات الحالية.'
+      description: متاح لـGOVERNORATE_ADMIN فأعلى. SUPERUSER لجميع المستخدمين، MINISTRY_ADMIN
+        لمستخدمي النظام، GOVERNORATE_ADMIN ضمن محافظته (القراء حسب محافظتهم المباشرة
+        والأمناء حسب محافظة مكتبتهم). LIBRARIAN وREADER ممنوعان؛ يستخدم LIBRARIAN
+        مسار reader-search.
       summary: قائمة المستخدمين ضمن نطاق مقدم الطلب
       parameters:
       - in: query
@@ -362,10 +765,11 @@ paths:
       operationId: users_create
       description: 'الأدوار المسموحة: SUPERUSER ينشئ جميع Business roles؛ MINISTRY_ADMIN
         ينشئ GOVERNORATE_ADMIN/LIBRARIAN/READER؛ GOVERNORATE_ADMIN ينشئ LIBRARIAN/READER
-        ضمن محافظته؛ LIBRARIAN ينشئ READER ضمن مكتبته؛ READER ممنوع. GOVERNORATE_ADMIN
-        يحتاج governorate، وLIBRARIAN يحتاج library، وREADER يحتاج library إلا عند
-        إنشائه بواسطة LIBRARIAN حيث تُعين server-side. is_staff وis_superuser ليسا
-        مدخلين مسموحين.'
+        ضمن محافظته؛ LIBRARIAN ينشئ READER فقط؛ READER ممنوع. GOVERNORATE_ADMIN يحتاج
+        governorate، وLIBRARIAN يحتاج library دون governorate. READER يرتبط بمحافظة
+        دون مكتبة: الوزارة تحدد governorate، بينما تُعين محافظة GOVERNORATE_ADMIN
+        أو محافظة مكتبة LIBRARIAN server-side، وإرسال محافظة مختلفة يُرفض. is_staff
+        وis_superuser وgroups وuser_permissions ليست مدخلات مسموحة.'
       summary: إنشاء مستخدم
       tags:
       - User Management
@@ -419,7 +823,8 @@ paths:
   /dashboard/users/{id}/:
     get:
       operationId: users_retrieve
-      description: الهدف خارج scoped queryset يعاد كـNOT_FOUND دون كشف وجوده.
+      description: متاح لـGOVERNORATE_ADMIN فأعلى. الهدف خارج scoped queryset يعاد
+        كـNOT_FOUND دون كشف وجوده.
       summary: جلب مستخدم ضمن النطاق
       parameters:
       - in: path
@@ -737,6 +1142,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
           description: THROTTLED.
+  /dashboard/users/reader-search/:
+    get:
+      operationId: users_reader_search
+      description: متاح لـLIBRARIAN فأعلى. LIBRARIAN يبحث ضمن محافظة مكتبته، GOVERNORATE_ADMIN
+        ضمن محافظته، وMINISTRY_ADMIN في جميع المحافظات. القراء الفعّالون فقط. عبارة
+        البحث `q` إلزامية (حرفان على الأقل) وتطابق username أو الاسم الأول أو الأخير
+        جزئياً، أو البريد أو الهاتف تطابقاً تاماً. النتائج مرتبة حسب username وتُعاد
+        على صفحات.
+      summary: البحث عن قارئ لاختياره في الاستعارة
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: بحد أقصى 50.
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: عبارة البحث.
+        required: true
+      tags:
+      - User Management
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReaderSearchSuccessEnvelope'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: VALIDATION_ERROR عند غياب عبارة البحث أو قصرها.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: AUTHENTICATION_REQUIRED أو INVALID_TOKEN.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: PERMISSION_DENIED.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+          description: THROTTLED.
 components:
   schemas:
     AccessTokenDataSchema:
@@ -904,6 +1370,273 @@ components:
       description: |-
         * `male` - ذكر
         * `female` - أنثى
+    GovernorateListSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernorateOption'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/GovernorateListSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    GovernorateListSuccessEnvelopeCodeEnum:
+      enum:
+      - GOVERNORATES_RETRIEVED
+      type: string
+      description: '* `GOVERNORATES_RETRIEVED` - GOVERNORATES_RETRIEVED'
+    GovernorateOption:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - name
+    GovernorateSummarySchema:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+      required:
+      - id
+      - name
+    Library:
+      type: object
+      description: Library details. Scope and role checks for the target object live
+        in the view.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        governorate:
+          type: integer
+        governorate_name:
+          type: string
+          readOnly: true
+        address:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          maxLength: 30
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        is_active:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - governorate_name
+      - id
+      - is_active
+      - name
+      - updated_at
+    LibraryActivateSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Library'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/LibraryActivateSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    LibraryActivateSuccessEnvelopeCodeEnum:
+      enum:
+      - LIBRARY_ACTIVATED
+      - LIBRARY_ALREADY_ACTIVE
+      type: string
+      description: |-
+        * `LIBRARY_ACTIVATED` - LIBRARY_ACTIVATED
+        * `LIBRARY_ALREADY_ACTIVE` - LIBRARY_ALREADY_ACTIVE
+    LibraryCreateSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Library'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/LibraryCreateSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    LibraryCreateSuccessEnvelopeCodeEnum:
+      enum:
+      - LIBRARY_CREATED
+      type: string
+      description: '* `LIBRARY_CREATED` - LIBRARY_CREATED'
+    LibraryDeactivateSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Library'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/LibraryDeactivateSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    LibraryDeactivateSuccessEnvelopeCodeEnum:
+      enum:
+      - LIBRARY_DEACTIVATED
+      - LIBRARY_ALREADY_INACTIVE
+      type: string
+      description: |-
+        * `LIBRARY_DEACTIVATED` - LIBRARY_DEACTIVATED
+        * `LIBRARY_ALREADY_INACTIVE` - LIBRARY_ALREADY_INACTIVE
+    LibraryListSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/LibraryPage'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/LibraryListSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    LibraryListSuccessEnvelopeCodeEnum:
+      enum:
+      - LIBRARIES_RETRIEVED
+      type: string
+      description: '* `LIBRARIES_RETRIEVED` - LIBRARIES_RETRIEVED'
+    LibraryPage:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Library'
+      required:
+      - count
+      - next
+      - previous
+      - results
+    LibraryRetrieveSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Library'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/LibraryRetrieveSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    LibraryRetrieveSuccessEnvelopeCodeEnum:
+      enum:
+      - LIBRARY_RETRIEVED
+      type: string
+      description: '* `LIBRARY_RETRIEVED` - LIBRARY_RETRIEVED'
+    LibraryUpdateSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Library'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/LibraryUpdateSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    LibraryUpdateSuccessEnvelopeCodeEnum:
+      enum:
+      - LIBRARY_UPDATED
+      type: string
+      description: '* `LIBRARY_UPDATED` - LIBRARY_UPDATED'
     Login:
       type: object
       properties:
@@ -958,8 +1691,16 @@ components:
           type: string
         role:
           $ref: '#/components/schemas/RequesterRoleSchema'
+        governorate:
+          type: integer
+          nullable: true
+        library:
+          type: integer
+          nullable: true
       required:
+      - governorate
       - id
+      - library
       - role
       - username
     LogoutSuccessEnvelope:
@@ -989,6 +1730,29 @@ components:
     NullEnum:
       enum:
       - null
+    PaginatedLibraryListSuccessEnvelopeList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LibraryListSuccessEnvelope'
     PasswordChangedSuccessEnvelope:
       type: object
       properties:
@@ -1013,6 +1777,46 @@ components:
       - PASSWORD_CHANGED
       type: string
       description: '* `PASSWORD_CHANGED` - PASSWORD_CHANGED'
+    PatchedLibrary:
+      type: object
+      description: Library details. Scope and role checks for the target object live
+        in the view.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        governorate:
+          type: integer
+        governorate_name:
+          type: string
+          readOnly: true
+        address:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          maxLength: 30
+        email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        is_active:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedProfileUpdateSchema:
       type: object
       properties:
@@ -1060,12 +1864,20 @@ components:
           type: string
           format: date-time
           readOnly: true
+        governorate:
+          type: integer
+          readOnly: true
+        library:
+          type: integer
+          readOnly: true
         profile:
           $ref: '#/components/schemas/UserDetails'
       required:
       - borrowed_books_count
       - borrowing_blocked
       - date_joined
+      - governorate
+      - library
       - overdue_books_count
       - username
     ProfilePatchSuccessEnvelope:
@@ -1154,6 +1966,186 @@ components:
         age:
           type: integer
           nullable: true
+    ReaderSearchPage:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReaderSearchResult'
+      required:
+      - count
+      - next
+      - previous
+      - results
+    ReaderSearchResult:
+      type: object
+      description: Minimal reader identity used when selecting a borrower.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        governorate:
+          allOf:
+          - $ref: '#/components/schemas/GovernorateSummarySchema'
+          readOnly: true
+      required:
+      - first_name
+      - full_name
+      - governorate
+      - id
+      - last_name
+      - username
+    ReaderSearchSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ReaderSearchPage'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/ReaderSearchSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    ReaderSearchSuccessEnvelopeCodeEnum:
+      enum:
+      - READERS_RETRIEVED
+      type: string
+      description: '* `READERS_RETRIEVED` - READERS_RETRIEVED'
+    Register:
+      type: object
+      description: Public self-registration. Always creates an unscoped-library READER.
+      properties:
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+        password2:
+          type: string
+          writeOnly: true
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        governorate:
+          type: integer
+      required:
+      - email
+      - first_name
+      - governorate
+      - last_name
+      - password
+      - password2
+      - username
+    RegisterSuccessEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/RegisteredUser'
+        success:
+          type: boolean
+          default: true
+        code:
+          $ref: '#/components/schemas/RegisterSuccessEnvelopeCodeEnum'
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMetaSchema'
+      required:
+      - code
+      - data
+      - message
+      - meta
+    RegisterSuccessEnvelopeCodeEnum:
+      enum:
+      - ACCOUNT_REGISTERED
+      type: string
+      description: '* `ACCOUNT_REGISTERED` - ACCOUNT_REGISTERED'
+    RegisteredUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        first_name:
+          type: string
+          readOnly: true
+        last_name:
+          type: string
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RequesterRoleSchema'
+          readOnly: true
+        governorate:
+          type: integer
+          readOnly: true
+          nullable: true
+        library:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - email
+      - first_name
+      - governorate
+      - id
+      - last_name
+      - library
+      - role
+      - username
     RequesterRoleSchema:
       type: object
       properties:

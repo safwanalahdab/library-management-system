@@ -2,6 +2,7 @@ from django.urls import path , include
 from .views import (
     BorrwoedProfileView,
     GovernorateListView,
+    LibraryViewSet,
     LoginView,
     LogoutView,
     MeView,
@@ -16,6 +17,7 @@ from rest_framework.routers import DefaultRouter
 router = DefaultRouter() 
 router.register('profileborrwoed', BorrwoedProfileView , basename = 'BorrwoedProfileView' )
 router.register('Recoveredbooks', RecoveredbooksProfileView , basename = 'RecoveredbooksProfileView' )
+router.register('libraries', LibraryViewSet , basename = 'libraries' )
 
 urlpatterns = [
       path('register' , RegisterView.as_view() , name = "register" ) ,

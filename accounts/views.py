@@ -3,10 +3,11 @@ from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from rest_framework import generics, serializers, status, viewsets
+from rest_framework import generics, mixins, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -17,6 +18,7 @@ from drf_spectacular.utils import (
     OpenApiParameter,
     extend_schema,
     extend_schema_view,
+    inline_serializer,
 )
 
 from Bookshelf.api_responses import (
@@ -34,9 +36,12 @@ from Bookshelf.openapi import (
 from books.models import BorrowedBook
 from books.serializers import BarrowBookSerilaizers
 from .models import Governorate
+from .permissions import IsGovernorateAdmin, IsLibrarian, IsReader
+from .scopes import libraries_accessible_to
 from .serializers import (
     CurrentUserSerializer,
     GovernorateOptionSerializer,
+    LibrarySerializer,
     LoginSerializer,
     ProfileSerializer,
     RegisteredUserSerializer,
@@ -133,6 +138,226 @@ class GovernorateListView(ArabicApiResponseMixin, generics.ListAPIView):
     success_response_messages = {
         "get": ("GOVERNORATES_RETRIEVED", "تم جلب المحافظات بنجاح."),
     }
+
+
+class LibraryPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+LIBRARY_PAGE_SCHEMA = inline_serializer(
+    name="LibraryPage",
+    fields={
+        "count": serializers.IntegerField(),
+        "next": serializers.URLField(allow_null=True),
+        "previous": serializers.URLField(allow_null=True),
+        "results": LibrarySerializer(many=True),
+    },
+)
+
+LIBRARY_COMMON_ERRORS = {
+    401: error_response("AUTHENTICATION_REQUIRED أو INVALID_TOKEN."),
+    429: error_response("THROTTLED."),
+}
+
+
+def _library_status_schema(operation_id, summary, description, envelope_name, codes):
+    return extend_schema(
+        tags=["Library Management"],
+        operation_id=operation_id,
+        summary=summary,
+        description=description,
+        request=None,
+        responses={
+            200: success_envelope(envelope_name, LibrarySerializer(), codes),
+            403: error_response("PERMISSION_DENIED لأمين المكتبة والقارئ."),
+            404: error_response("NOT_FOUND، ويشمل المكتبة خارج النطاق."),
+            **LIBRARY_COMMON_ERRORS,
+        },
+    )
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Library Management"],
+        operation_id="libraries_list",
+        summary="قائمة المكتبات ضمن نطاق مقدم الطلب",
+        description=(
+            "MINISTRY_ADMIN: جميع المكتبات المفعّلة وغير المفعّلة. GOVERNORATE_ADMIN: مكتبات محافظته. "
+            "LIBRARIAN: مكتبته فقط ولو كانت غير مفعّلة. READER: المكتبات المفعّلة ضمن محافظته فقط. "
+            "الفلاتر تضيّق النطاق المسموح ولا توسّعه. الترتيب حسب الاسم ثم المعرّف."
+        ),
+        parameters=[
+            OpenApiParameter(name="search", type=str, required=False, description="بحث جزئي في اسم المكتبة."),
+            OpenApiParameter(name="governorate", type=int, required=False, description="معرّف المحافظة."),
+            OpenApiParameter(name="is_active", type=bool, required=False, description="true أو false."),
+            OpenApiParameter(name="page", type=int, required=False),
+            OpenApiParameter(name="page_size", type=int, required=False, description="بحد أقصى 100."),
+        ],
+        responses={
+            200: success_envelope("LibraryListSuccessEnvelope", LIBRARY_PAGE_SCHEMA, ["LIBRARIES_RETRIEVED"]),
+            400: error_response("VALIDATION_ERROR عند قيمة فلتر غير صالحة."),
+            403: error_response("PERMISSION_DENIED لحساب بلا دور صالح."),
+            **LIBRARY_COMMON_ERRORS,
+        },
+    ),
+    retrieve=extend_schema(
+        tags=["Library Management"],
+        operation_id="libraries_retrieve",
+        summary="جلب مكتبة ضمن النطاق",
+        description="المكتبة خارج نطاق مقدم الطلب تعاد كـNOT_FOUND دون كشف وجودها.",
+        responses={
+            200: success_envelope("LibraryRetrieveSuccessEnvelope", LibrarySerializer(), ["LIBRARY_RETRIEVED"]),
+            403: error_response("PERMISSION_DENIED لحساب بلا دور صالح."),
+            404: error_response("NOT_FOUND، ويشمل المكتبة خارج النطاق."),
+            **LIBRARY_COMMON_ERRORS,
+        },
+    ),
+    create=extend_schema(
+        tags=["Library Management"],
+        operation_id="libraries_create",
+        summary="إنشاء مكتبة",
+        description=(
+            "متاح لـMINISTRY_ADMIN وGOVERNORATE_ADMIN. الوزارة تحدد governorate (محافظة فعالة). "
+            "مسؤول المحافظة تُعيَّن محافظته تلقائياً، وإرسال محافظة مختلفة يُرفض. "
+            "المكتبة الجديدة مفعّلة دائماً؛ إرسال is_active أو أي حقل غير مسموح يُرفض بـVALIDATION_ERROR."
+        ),
+        request=LibrarySerializer,
+        responses={
+            201: success_envelope("LibraryCreateSuccessEnvelope", LibrarySerializer(), ["LIBRARY_CREATED"]),
+            400: error_response("VALIDATION_ERROR مع تفاصيل الحقول."),
+            403: error_response("PERMISSION_DENIED لأمين المكتبة والقارئ."),
+            **LIBRARY_COMMON_ERRORS,
+        },
+    ),
+    partial_update=extend_schema(
+        tags=["Library Management"],
+        operation_id="libraries_update",
+        summary="تعديل بيانات مكتبة",
+        description=(
+            "الحقول المسموحة: name وaddress وphone وemail. متاح لـMINISTRY_ADMIN وGOVERNORATE_ADMIN ضمن نطاقه "
+            "ولـLIBRARIAN على مكتبته فقط. لا يمكن تغيير governorate بعد الإنشاء (إرسال القيمة الحالية مقبول دون أثر). "
+            "إرسال is_active أو أي حقل غير مسموح يُرفض بـVALIDATION_ERROR."
+        ),
+        request=LibrarySerializer,
+        responses={
+            200: success_envelope("LibraryUpdateSuccessEnvelope", LibrarySerializer(), ["LIBRARY_UPDATED"]),
+            400: error_response("VALIDATION_ERROR مع تفاصيل الحقول."),
+            403: error_response("PERMISSION_DENIED للقارئ."),
+            404: error_response("NOT_FOUND، ويشمل المكتبة خارج النطاق."),
+            **LIBRARY_COMMON_ERRORS,
+        },
+    ),
+)
+class LibraryViewSet(
+    ArabicApiResponseMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Library management. No DELETE or PUT: only `partial_update` is exposed for edits."""
+
+    serializer_class = LibrarySerializer
+    pagination_class = LibraryPagination
+    success_response_messages = {
+        "list": ("LIBRARIES_RETRIEVED", "تم جلب المكتبات بنجاح."),
+        "retrieve": ("LIBRARY_RETRIEVED", "تم جلب بيانات المكتبة بنجاح."),
+        "create": ("LIBRARY_CREATED", "تم إنشاء المكتبة بنجاح."),
+        "partial_update": ("LIBRARY_UPDATED", "تم تحديث بيانات المكتبة بنجاح."),
+    }
+    governorate_admin_actions = frozenset({"create", "activate", "deactivate"})
+
+    def get_permissions(self):
+        if self.action in self.governorate_admin_actions:
+            return [IsGovernorateAdmin()]
+        if self.action == "partial_update":
+            return [IsLibrarian()]
+        return [IsReader()]
+
+    def get_queryset(self):
+        queryset = libraries_accessible_to(self.request.user).select_related("governorate")
+        if self.action == "list":
+            queryset = self._apply_list_filters(queryset)
+        return queryset.order_by("name", "id")
+
+    def _apply_list_filters(self, queryset):
+        params = self.request.query_params
+
+        search = (params.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        governorate = params.get("governorate")
+        if governorate not in (None, ""):
+            try:
+                governorate_id = int(governorate)
+            except (TypeError, ValueError):
+                raise ValidationError({"governorate": "يجب أن يكون معرّف المحافظة رقماً صحيحاً."})
+            queryset = queryset.filter(governorate_id=governorate_id)
+
+        is_active = params.get("is_active")
+        if is_active not in (None, ""):
+            value = is_active.strip().lower()
+            if value in {"true", "1"}:
+                queryset = queryset.filter(is_active=True)
+            elif value in {"false", "0"}:
+                queryset = queryset.filter(is_active=False)
+            else:
+                raise ValidationError({"is_active": "القيم المسموحة: true أو false."})
+
+        return queryset
+
+    def partial_update(self, request, *args, **kwargs):
+        library = self.get_object()
+        serializer = self.get_serializer(library, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def _set_active_status(self, active):
+        library = self.get_object()
+        changed = library.is_active != active
+        if changed:
+            library.is_active = active
+            library.save(update_fields=["is_active", "updated_at"])
+        return library, changed
+
+    @_library_status_schema(
+        "library_activate",
+        "تفعيل مكتبة",
+        "متاح لـMINISTRY_ADMIN وGOVERNORATE_ADMIN ضمن نطاقه. التكرار لا يسبب خطأ.",
+        "LibraryActivateSuccessEnvelope",
+        ["LIBRARY_ACTIVATED", "LIBRARY_ALREADY_ACTIVE"],
+    )
+    @action(detail=True, methods=["post"], url_path="activate")
+    def activate(self, request, pk=None):
+        library, changed = self._set_active_status(True)
+        return self.success_response(
+            data=self.get_serializer(library).data,
+            code="LIBRARY_ACTIVATED" if changed else "LIBRARY_ALREADY_ACTIVE",
+            message="تم تفعيل المكتبة بنجاح." if changed else "المكتبة مفعّلة بالفعل.",
+        )
+
+    @_library_status_schema(
+        "library_deactivate",
+        "إلغاء تفعيل مكتبة",
+        (
+            "متاح لـMINISTRY_ADMIN وGOVERNORATE_ADMIN ضمن نطاقه. لا يحذف المكتبة ولا علاقاتها، "
+            "ولا يغيّر حالة حسابات المستخدمين المرتبطين بها. التكرار لا يسبب خطأ."
+        ),
+        "LibraryDeactivateSuccessEnvelope",
+        ["LIBRARY_DEACTIVATED", "LIBRARY_ALREADY_INACTIVE"],
+    )
+    @action(detail=True, methods=["post"], url_path="deactivate")
+    def deactivate(self, request, pk=None):
+        library, changed = self._set_active_status(False)
+        return self.success_response(
+            data=self.get_serializer(library).data,
+            code="LIBRARY_DEACTIVATED" if changed else "LIBRARY_ALREADY_INACTIVE",
+            message="تم إلغاء تفعيل المكتبة بنجاح." if changed else "المكتبة غير مفعّلة بالفعل.",
+        )
 
 
 @extend_schema_view(

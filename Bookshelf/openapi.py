@@ -11,6 +11,7 @@ DOCUMENTED_API_METHODS = {
     ("accounts.views", "ResetPasswordView"): {"POST"},
     ("accounts.views", "RegisterView"): {"POST"},
     ("accounts.views", "GovernorateListView"): {"GET"},
+    ("accounts.views", "LibraryViewSet"): {"GET", "POST", "PATCH"},
 }
 
 DOCUMENTED_USER_ACTIONS = {

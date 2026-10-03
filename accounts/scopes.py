@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from .models import CustomUser
+from .models import CustomUser, Library
 
 
 BUSINESS_ROLES = frozenset(CustomUser.Role.values)
@@ -93,6 +93,28 @@ def can_access_user(actor, target):
     # Librarians and readers only reach their own account here. Librarians
     # find readers through readers_searchable_by(), which exposes limited data.
     return False
+
+
+def libraries_accessible_to(actor):
+    """Return the library queryset visible to an actor under the business scope rules."""
+    queryset = Library.objects.all()
+    if not is_authenticated_user(actor):
+        return queryset.none()
+    if is_superuser(actor) or actor.role == CustomUser.Role.MINISTRY_ADMIN:
+        return queryset
+    if actor.role == CustomUser.Role.GOVERNORATE_ADMIN:
+        if actor.governorate_id is None:
+            return queryset.none()
+        return queryset.filter(governorate_id=actor.governorate_id)
+    if actor.role == CustomUser.Role.LIBRARIAN:
+        if actor.library_id is None:
+            return queryset.none()
+        return queryset.filter(pk=actor.library_id)
+    if actor.role == CustomUser.Role.READER:
+        if actor.governorate_id is None:
+            return queryset.none()
+        return queryset.filter(governorate_id=actor.governorate_id, is_active=True)
+    return queryset.none()
 
 
 def users_accessible_to(actor):

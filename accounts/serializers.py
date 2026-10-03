@@ -3,7 +3,8 @@ from django.contrib.auth import authenticate, get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.password_validation import validate_password 
 from django.db import IntegrityError, transaction
-from .models import Governorate
+from .models import Governorate, Library
+from .scopes import is_superuser
 from drf_spectacular.utils import extend_schema_field
 from Bookshelf.api_responses import InvalidCredentials, get_user_role_meta
 from Bookshelf.openapi import RequesterRoleSchemaSerializer
@@ -308,3 +309,82 @@ class ProfileSerializer( serializers.ModelSerializer ) :
             instance.save(update_fields=profile_data.keys())
 
         return instance
+
+
+class LibrarySerializer(serializers.ModelSerializer):
+    """Library details. Scope and role checks for the target object live in the view."""
+
+    governorate = serializers.PrimaryKeyRelatedField(
+        queryset=Governorate.objects.all(),
+        required=False,
+    )
+    governorate_name = serializers.CharField(source="governorate.name", read_only=True)
+
+    writable_input_fields = frozenset({"name", "address", "phone", "email", "governorate"})
+
+    class Meta:
+        model = Library
+        fields = [
+            "id",
+            "name",
+            "governorate",
+            "governorate_name",
+            "address",
+            "phone",
+            "email",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "is_active", "created_at", "updated_at"]
+
+    def to_internal_value(self, data):
+        # Reject unexpected keys up front instead of silently dropping them.
+        if hasattr(data, "keys"):
+            errors = {}
+            for field in data.keys():
+                if field == "is_active":
+                    errors[field] = "تُغيَّر حالة المكتبة عبر عمليتي التفعيل وإلغاء التفعيل فقط."
+                elif field not in self.writable_input_fields:
+                    errors[field] = "هذا الحقل غير مسموح به."
+            if errors:
+                raise serializers.ValidationError(errors)
+        return super().to_internal_value(data)
+
+    def _get_actor(self):
+        request = self.context.get("request")
+        return getattr(request, "user", None)
+
+    def validate_governorate(self, value):
+        if self.instance is not None:
+            if value.pk != self.instance.governorate_id:
+                raise serializers.ValidationError("لا يمكن تغيير محافظة المكتبة بعد إنشائها.")
+            return value
+
+        actor = self._get_actor()
+        if (
+            not is_superuser(actor)
+            and actor.role == User.Role.GOVERNORATE_ADMIN
+            and value.pk != actor.governorate_id
+        ):
+            raise serializers.ValidationError("لا يمكنك إنشاء مكتبة خارج محافظتك.")
+        return value
+
+    def validate(self, attrs):
+        if self.instance is not None:
+            # The governorate is fixed after creation; an identical value is a no-op.
+            attrs.pop("governorate", None)
+            return attrs
+
+        actor = self._get_actor()
+        if not is_superuser(actor) and actor.role == User.Role.GOVERNORATE_ADMIN:
+            attrs["governorate"] = actor.governorate
+
+        governorate = attrs.get("governorate")
+        if governorate is None:
+            raise serializers.ValidationError({"governorate": "يجب تحديد محافظة المكتبة."})
+        if not governorate.is_active:
+            raise serializers.ValidationError(
+                {"governorate": "لا يمكن إنشاء مكتبة ضمن محافظة غير فعالة."}
+            )
+        return attrs
