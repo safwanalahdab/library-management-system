@@ -15,6 +15,11 @@ DOCUMENTED_API_METHODS = {
     ("dashboard.borrowing_views", "BookBorrowRequestCreateView"): {"POST"},
     ("dashboard.favorites_views", "BookFavoriteView"): {"POST", "DELETE"},
     ("dashboard.favorites_views", "FavoriteBookListView"): {"GET"},
+    # Administrative statistics; the legacy DashboardStatsView stays hidden.
+    ("dashboard.statistics_views", "DashboardOverviewView"): {"GET"},
+    ("dashboard.statistics_views", "DashboardTimelineView"): {"GET"},
+    ("dashboard.statistics_views", "DashboardRankingsView"): {"GET"},
+    ("dashboard.statistics_views", "DashboardDistributionsView"): {"GET"},
 }
 
 DOCUMENTED_USER_ACTIONS = {

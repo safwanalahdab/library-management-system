@@ -2,6 +2,12 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .borrowing_views import BookBorrowRequestCreateView, BorrowRequestViewSet, BorrowViewSet
 from .favorites_views import BookFavoriteView, FavoriteBookListView
+from .statistics_views import (
+    DashboardDistributionsView,
+    DashboardOverviewView,
+    DashboardRankingsView,
+    DashboardTimelineView,
+)
 from .views import (
     AuthorAdminView,
     BookAdminView,
@@ -27,6 +33,11 @@ urlpatterns = [
     path('books/<int:pk>/borrow-requests/', BookBorrowRequestCreateView.as_view(), name='book-borrow-requests'),
     path('books/<int:pk>/favorite/', BookFavoriteView.as_view(), name='book-favorite'),
     path('favorites/', FavoriteBookListView.as_view(), name='favorites'),
+    path('stats/overview/', DashboardOverviewView.as_view(), name='dashboard-stats-overview'),
+    path('stats/timeline/', DashboardTimelineView.as_view(), name='dashboard-stats-timeline'),
+    path('stats/rankings/', DashboardRankingsView.as_view(), name='dashboard-stats-rankings'),
+    path('stats/distributions/', DashboardDistributionsView.as_view(), name='dashboard-stats-distributions'),
     path('', include(router.urls) ) ,
+    # Deprecated legacy stats (BorrowedBook, unscoped); hidden from Swagger.
     path('stats/' , DashboardStatsView.as_view() , name = "DashboardStatsView" ) ,
 ]

@@ -1026,7 +1026,20 @@ Returns a list of `BarrowBookSerilaizers` objects.
 
 
 class DashboardStatsView ( APIView ) :
-    permission_classes = [IsAdminUser] 
+    """DEPRECATED legacy stats built on BorrowedBook, without organizational scope.
+
+    Replaced by GET /dashboard/stats/{overview,timeline,rankings,distributions}/
+    (dashboard.statistics_views). Kept only for clients that have not migrated
+    yet and hidden from Swagger; remove it with the legacy BorrowedBook routes.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def finalize_response( self , request , response , *args , **kwargs ) :
+        response = super().finalize_response( request , response , *args , **kwargs )
+        response["Deprecation"] = "true"
+        response["Link"] = '</dashboard/stats/overview/>; rel="successor-version"'
+        return response
 
     def get( self , request ) : 
         total_users = User.objects.count() 
