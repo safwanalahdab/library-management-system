@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .borrowing_views import BookBorrowRequestCreateView, BorrowRequestViewSet, BorrowViewSet
+from .favorites_views import BookFavoriteView, FavoriteBookListView
 from .views import (
     AuthorAdminView,
     BookAdminView,
@@ -24,6 +25,8 @@ router.register(r'borrows', BorrowViewSet, basename='borrows')
 urlpatterns = [
     # Reader borrow requests are created from the book; listed under borrow-requests/.
     path('books/<int:pk>/borrow-requests/', BookBorrowRequestCreateView.as_view(), name='book-borrow-requests'),
+    path('books/<int:pk>/favorite/', BookFavoriteView.as_view(), name='book-favorite'),
+    path('favorites/', FavoriteBookListView.as_view(), name='favorites'),
     path('', include(router.urls) ) ,
     path('stats/' , DashboardStatsView.as_view() , name = "DashboardStatsView" ) ,
 ]

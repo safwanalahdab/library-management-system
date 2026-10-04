@@ -92,6 +92,32 @@ class Book ( models.Model ) :
     def __str__( self ) : 
         return self.title 
     
+class FavoriteBook(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="favorite_books",
+    )
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.CASCADE,
+        related_name="favorites",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "book"],
+                name="books_favoritebook_unique_user_book",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} → {self.book_id}"
+
+
 class BorrowedBook ( models.Model ) :
      book = models.ForeignKey( Book , on_delete = models.CASCADE , related_name = "borrowed_book" ) 
      borrower = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete = models.CASCADE , related_name = "borrower_book") 

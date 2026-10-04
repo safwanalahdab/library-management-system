@@ -167,6 +167,8 @@ class RemovedModelsTests(APITestCase):
             with self.subTest(model=model_name):
                 self.assertNotIn(model_name, installed)
 
+        self.assertIn("FavoriteBook", installed)
+
         for model in (Book, Author, Category, BorrowedBook, CustomUser, Governorate, Library):
             with self.subTest(model=model.__name__):
                 self.assertTrue(admin.site.is_registered(model))

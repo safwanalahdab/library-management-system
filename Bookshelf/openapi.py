@@ -13,6 +13,8 @@ DOCUMENTED_API_METHODS = {
     ("accounts.views", "GovernorateListView"): {"GET"},
     ("accounts.views", "LibraryViewSet"): {"GET", "POST", "PATCH"},
     ("dashboard.borrowing_views", "BookBorrowRequestCreateView"): {"POST"},
+    ("dashboard.favorites_views", "BookFavoriteView"): {"POST", "DELETE"},
+    ("dashboard.favorites_views", "FavoriteBookListView"): {"GET"},
 }
 
 DOCUMENTED_USER_ACTIONS = {
